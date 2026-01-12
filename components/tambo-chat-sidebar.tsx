@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { Send, Bot, User, Loader2, Sparkles, AlertCircle, ChevronDown, Trash2, MessageSquare } from "lucide-react";
 import {
   useTamboThread,
   useTamboThreadInput,
@@ -14,10 +14,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTamboConfig } from "@/components/providers";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   extractQueryFromToolResult,
   parseQuerySuggestion,
   QuerySuggestionInline,
 } from "@/components/tambo/query-suggestion-inline";
+
+// Demo prompts based on EBMUD water utility data
+const DEMO_PROMPTS = [
+  "Are there any emergency work orders that I have to deal with?",
+  "Any main breaks at Fruitvale Ave?",
+  "Show me hydrants that failed inspection in the last year",
+  "What are the most common valve exercise issues?",
+  "List critical users like hospitals in Oakland",
+];
 
 function getMessageText(content: TamboThreadMessage["content"]): string {
   if (!content) return "";
@@ -150,9 +166,18 @@ function MessageBubble({
 }
 
 function TamboChatContent() {
-  const { thread, isIdle } = useTamboThread();
+  const { thread, isIdle, resetThread } = useTamboThread();
   const { value, setValue, submit, isPending } = useTamboThreadInput();
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const handleDemoPrompt = (prompt: string) => {
+    setValue(prompt);
+  };
+
+  const handleClear = () => {
+    setValue("");
+    resetThread?.();
+  };
 
   const allMessages = thread?.messages || [];
 
@@ -222,6 +247,42 @@ function TamboChatContent() {
 
   return (
     <>
+      {/* Header with dropdown */}
+      <div className="flex items-center justify-between px-3 py-3 border-b h-14 shrink-0">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span className="font-semibold">AI Assistant</span>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <ChevronDown className="h-4 w-4" />
+              <span className="sr-only">Open menu</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-72">
+            {DEMO_PROMPTS.map((prompt, index) => (
+              <DropdownMenuItem
+                key={index}
+                onClick={() => handleDemoPrompt(prompt)}
+                className="cursor-pointer"
+              >
+                <MessageSquare className="h-4 w-4 mr-2 shrink-0" />
+                <span className="truncate">{prompt}</span>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={handleClear}
+              className="cursor-pointer text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       <ScrollArea className="flex-1 min-h-0" ref={scrollRef}>
         <div className="p-4 min-w-0">
           {!isIdle ? (
@@ -313,15 +374,20 @@ export function TamboChatSidebar({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex h-full flex-col overflow-hidden", className)}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-3 border-b h-14 shrink-0">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <span className="font-semibold">AI Assistant</span>
-      </div>
-      {/* Content */}
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        {isConfigured ? <TamboChatContent /> : <TamboNotConfigured />}
-      </div>
+      {isConfigured ? (
+        <TamboChatContent />
+      ) : (
+        <>
+          {/* Header for unconfigured state */}
+          <div className="flex items-center gap-2 px-3 py-3 border-b h-14 shrink-0">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <span className="font-semibold">AI Assistant</span>
+          </div>
+          <div className="flex-1">
+            <TamboNotConfigured />
+          </div>
+        </>
+      )}
     </div>
   );
 }
