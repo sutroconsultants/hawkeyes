@@ -166,7 +166,7 @@ function MessageBubble({
 }
 
 function TamboChatContent() {
-  const { thread, isIdle, resetThread } = useTamboThread();
+  const { thread, isIdle, startNewThread } = useTamboThread();
   const { value, setValue, submit, isPending } = useTamboThreadInput();
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -176,7 +176,7 @@ function TamboChatContent() {
 
   const handleClear = () => {
     setValue("");
-    resetThread?.();
+    startNewThread();
   };
 
   const allMessages = thread?.messages || [];
@@ -343,11 +343,16 @@ function TamboChatContent() {
             className="w-full"
           >
             {isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Thinking...
+              </>
             ) : (
-              <Send className="h-4 w-4 mr-2" />
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Send
+              </>
             )}
-            Send
           </Button>
         </form>
       </div>

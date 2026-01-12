@@ -28,6 +28,23 @@ import {
 const DEFAULT_LEFT_SIZE = "250px";
 const DEFAULT_RIGHT_SIZE = "320px";
 
+const STORAGE_KEY_LEFT = "hawkeyes-left-panel-size";
+const STORAGE_KEY_RIGHT = "hawkeyes-right-panel-size";
+
+function getSavedSize(key: string, defaultSize: string): string {
+  if (typeof window === "undefined") return defaultSize;
+  return localStorage.getItem(key) || defaultSize;
+}
+
+function savePanelSize(key: string, sizePixels: number | null) {
+  if (typeof window === "undefined") return;
+  if (sizePixels === null || sizePixels === 0) {
+    localStorage.removeItem(key);
+  } else {
+    localStorage.setItem(key, `${Math.round(sizePixels)}px`);
+  }
+}
+
 export default function ProjectPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -41,6 +58,27 @@ export default function ProjectPage() {
 
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
+
+  // Load saved sizes from localStorage on mount
+  const [leftSize, setLeftSize] = React.useState(DEFAULT_LEFT_SIZE);
+  const [rightSize, setRightSize] = React.useState(DEFAULT_RIGHT_SIZE);
+
+  React.useEffect(() => {
+    setLeftSize(getSavedSize(STORAGE_KEY_LEFT, DEFAULT_LEFT_SIZE));
+    setRightSize(getSavedSize(STORAGE_KEY_RIGHT, DEFAULT_RIGHT_SIZE));
+  }, []);
+
+  const handleLeftResize = React.useCallback((size: { asPixels: number; asPercentage: number }) => {
+    const isCollapsed = size.asPercentage === 0;
+    setLeftCollapsed(isCollapsed);
+    savePanelSize(STORAGE_KEY_LEFT, isCollapsed ? null : size.asPixels);
+  }, []);
+
+  const handleRightResize = React.useCallback((size: { asPixels: number; asPercentage: number }) => {
+    const isCollapsed = size.asPercentage === 0;
+    setRightCollapsed(isCollapsed);
+    savePanelSize(STORAGE_KEY_RIGHT, isCollapsed ? null : size.asPixels);
+  }, []);
 
   const handleTableSelect = (database: string, table: string) => {
     setSelectedTable({ database, table });
@@ -141,11 +179,11 @@ export default function ProjectPage() {
           {/* Left Sidebar - ClickHouse Tables */}
           <Panel
             panelRef={leftPanelRef}
-            defaultSize={DEFAULT_LEFT_SIZE}
+            defaultSize={leftSize}
             minSize={0}
             collapsible
             collapsedSize={0}
-            onResize={(size) => setLeftCollapsed(size.asPercentage === 0)}
+            onResize={handleLeftResize}
             className="bg-sidebar"
           >
             <ClickHouseTablesSidebar
@@ -170,11 +208,11 @@ export default function ProjectPage() {
           {/* Right Sidebar - AI Chat */}
           <Panel
             panelRef={rightPanelRef}
-            defaultSize={DEFAULT_RIGHT_SIZE}
+            defaultSize={rightSize}
             minSize={0}
             collapsible
             collapsedSize={0}
-            onResize={(size) => setRightCollapsed(size.asPercentage === 0)}
+            onResize={handleRightResize}
             className="bg-sidebar"
           >
             <TamboChatSidebar className="h-full border-l-0" />

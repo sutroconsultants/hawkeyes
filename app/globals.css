@@ -123,3 +123,36 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Dark mode scrollbars */
+.dark {
+  /* Firefox */
+  scrollbar-color: oklch(0.4 0 0) oklch(0.2 0 0);
+}
+
+.dark * {
+  scrollbar-color: oklch(0.4 0 0) oklch(0.2 0 0);
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: oklch(0.2 0 0);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.4 0 0);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0 0);
+}
+
+.dark ::-webkit-scrollbar-corner {
+  background: oklch(0.2 0 0);
+}
