@@ -27,21 +27,40 @@ import {
 
 const DEFAULT_LEFT_SIZE = "250px";
 const DEFAULT_RIGHT_SIZE = "320px";
+const MIN_OPEN_SIZE = 100; // Minimum pixels to consider panel "open"
 
 const STORAGE_KEY_LEFT = "hawkeyes-left-panel-size";
 const STORAGE_KEY_RIGHT = "hawkeyes-right-panel-size";
 
 function getSavedSize(key: string, defaultSize: string): string {
   if (typeof window === "undefined") return defaultSize;
-  return localStorage.getItem(key) || defaultSize;
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(key);
+  } catch {
+    return defaultSize;
+  }
+  if (!saved) return defaultSize;
+
+  // Parse the saved value and ensure it's at least MIN_OPEN_SIZE
+  const pixels = parseInt(saved, 10);
+  if (isNaN(pixels) || pixels < MIN_OPEN_SIZE) {
+    localStorage.removeItem(key);
+    return defaultSize;
+  }
+  return saved;
 }
 
 function savePanelSize(key: string, sizePixels: number | null) {
   if (typeof window === "undefined") return;
-  if (sizePixels === null || sizePixels === 0) {
-    localStorage.removeItem(key);
-  } else {
-    localStorage.setItem(key, `${Math.round(sizePixels)}px`);
+  try {
+    if (sizePixels === null || sizePixels < MIN_OPEN_SIZE) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, `${Math.round(sizePixels)}px`);
+    }
+  } catch {
+    // Ignore storage errors (e.g., blocked storage in private mode).
   }
 }
 
@@ -59,25 +78,31 @@ export default function ProjectPage() {
   const [leftCollapsed, setLeftCollapsed] = React.useState(false);
   const [rightCollapsed, setRightCollapsed] = React.useState(false);
 
+  // Track if component is mounted to avoid hydration mismatch
+  const [isMounted, setIsMounted] = React.useState(false);
+
   // Load saved sizes from localStorage on mount
   const [leftSize, setLeftSize] = React.useState(DEFAULT_LEFT_SIZE);
   const [rightSize, setRightSize] = React.useState(DEFAULT_RIGHT_SIZE);
 
   React.useEffect(() => {
-    setLeftSize(getSavedSize(STORAGE_KEY_LEFT, DEFAULT_LEFT_SIZE));
-    setRightSize(getSavedSize(STORAGE_KEY_RIGHT, DEFAULT_RIGHT_SIZE));
+    const savedLeft = getSavedSize(STORAGE_KEY_LEFT, DEFAULT_LEFT_SIZE);
+    const savedRight = getSavedSize(STORAGE_KEY_RIGHT, DEFAULT_RIGHT_SIZE);
+    setLeftSize(savedLeft);
+    setRightSize(savedRight);
+    setIsMounted(true);
   }, []);
 
-  const handleLeftResize = React.useCallback((size: { asPixels: number; asPercentage: number }) => {
+  const handleLeftResize = React.useCallback((size: { inPixels: number; asPercentage: number }) => {
     const isCollapsed = size.asPercentage === 0;
     setLeftCollapsed(isCollapsed);
-    savePanelSize(STORAGE_KEY_LEFT, isCollapsed ? null : size.asPixels);
+    savePanelSize(STORAGE_KEY_LEFT, isCollapsed ? null : size.inPixels);
   }, []);
 
-  const handleRightResize = React.useCallback((size: { asPixels: number; asPercentage: number }) => {
+  const handleRightResize = React.useCallback((size: { inPixels: number; asPercentage: number }) => {
     const isCollapsed = size.asPercentage === 0;
     setRightCollapsed(isCollapsed);
-    savePanelSize(STORAGE_KEY_RIGHT, isCollapsed ? null : size.asPixels);
+    savePanelSize(STORAGE_KEY_RIGHT, isCollapsed ? null : size.inPixels);
   }, []);
 
   const handleTableSelect = (database: string, table: string) => {
@@ -105,6 +130,15 @@ export default function ProjectPage() {
       }
     }
   };
+
+  // Show loading state until localStorage sizes are loaded to prevent hydration mismatch
+  if (!isMounted) {
+    return (
+      <div className="flex h-svh items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>

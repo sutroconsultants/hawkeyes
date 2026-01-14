@@ -1,44 +1,68 @@
 "use client";
 
 import * as React from "react";
-import { Play, Copy, Check } from "lucide-react";
 import { z } from "zod";
+import { Play, Copy, Check } from "lucide-react";
 import type { TamboComponent } from "@tambo-ai/react";
 
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { QUERY_SUGGESTION_EVENT } from "@/lib/tambo-events";
 
-// Event to communicate with the SQL editor
-export const QUERY_SUGGESTION_EVENT = "tambo:run-query";
+export { QUERY_SUGGESTION_EVENT };
 
-// Props schema for Tambo
-const querySuggestionPropsSchema = z.object({
-  query: z.string().describe("The SQL query to suggest running"),
-  description: z.string().optional().describe("A brief description of what this query does"),
-  title: z.string().optional().describe("Optional title for the query suggestion"),
-});
+const querySuggestionPropsSchema = z
+  .object({
+    query: z
+      .string()
+      .optional()
+      .describe("The SQL query to suggest running in the SQL editor."),
+    sql: z
+      .string()
+      .optional()
+      .describe("Alias for query (SQL string)."),
+    title: z.string().optional().describe("Optional title for the suggestion."),
+    description: z
+      .string()
+      .optional()
+      .describe("Optional description of what the query returns."),
+    summary: z
+      .string()
+      .optional()
+      .describe("Alias for description (brief summary)."),
+  })
+  .refine((data) => Boolean((data.query ?? data.sql)?.trim()), {
+    message: "Query is required",
+    path: ["query"],
+  });
 
 export type QuerySuggestionProps = z.infer<typeof querySuggestionPropsSchema>;
 
-function QuerySuggestionComponent({ query, description, title }: QuerySuggestionProps) {
+export function QuerySuggestionView({
+  query,
+  sql,
+  title,
+  description,
+  summary,
+}: QuerySuggestionProps) {
   const [copied, setCopied] = React.useState(false);
+  const finalQuery = query?.trim() || sql?.trim() || "";
+  const finalDescription = description ?? summary;
 
-  // Don't render if no query provided
-  if (!query || query.trim() === "") {
+  if (!finalQuery) {
     return null;
   }
 
   const handleRunQuery = () => {
-    // Dispatch a custom event that the SQL editor can listen to
     window.dispatchEvent(
       new CustomEvent(QUERY_SUGGESTION_EVENT, {
-        detail: { query },
-      })
+        detail: { query: finalQuery },
+      }),
     );
   };
 
   const handleCopyQuery = async () => {
-    await navigator.clipboard.writeText(query);
+    await navigator.clipboard.writeText(finalQuery);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -46,14 +70,14 @@ function QuerySuggestionComponent({ query, description, title }: QuerySuggestion
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
       {title && (
-        <h4 className="font-medium text-sm text-foreground">{title}</h4>
+        <h4 className="text-sm font-medium text-foreground">{title}</h4>
       )}
-      {description && (
-        <p className="text-sm text-muted-foreground">{description}</p>
+      {finalDescription && (
+        <p className="text-sm text-muted-foreground">{finalDescription}</p>
       )}
       <div className="bg-muted/50 rounded-md p-3 overflow-x-auto">
         <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all">
-          {query}
+          {finalQuery}
         </pre>
       </div>
       <ButtonGroup>
@@ -74,15 +98,10 @@ function QuerySuggestionComponent({ query, description, title }: QuerySuggestion
   );
 }
 
-// Export as TamboComponent for registration
 export const QuerySuggestion: TamboComponent = {
   name: "QuerySuggestion",
-  description: `Shows a SQL query with "Run Query" and "Copy" buttons.
-
-REQUIRED after every execute_clickhouse_query call.
-Use the executedQuery value from the tool response as the query prop.
-
-Example: <QuerySuggestion query={result.executedQuery} title="View Results" />`,
-  component: QuerySuggestionComponent,
+  description:
+    "Shows a SQL query with Run/Copy actions so the user can execute it.",
+  component: QuerySuggestionView,
   propsSchema: querySuggestionPropsSchema,
 };

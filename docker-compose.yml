@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: hawkeyes-clickhouse
     ports:
-      - "8123:8123"  # HTTP interface
+      - "7800:8123"  # HTTP interface
       - "9000:9000"  # Native TCP interface
     volumes:
       - clickhouse_data:/var/lib/clickhouse
@@ -25,6 +23,30 @@ services:
       timeout: 5s
       retries: 3
 
+  web:
+    image: node:22-bookworm
+    container_name: hawkeyes-web
+    working_dir: /app
+    command: >
+      sh -c "npm install -g npm@11.7.0 && npm install && npm run dev -- --hostname 0.0.0.0 --port 7900"
+    ports:
+      - "7900:7900"
+    env_file:
+      - .env.local
+    environment:
+      - CLICKHOUSE_HOST=http://clickhouse:8123
+      - NEXT_PUBLIC_TAMBO_API_KEY=tambo_9b/fvma7Z7J0ZKZ9nemPMy+OZzrtAiaurVR8wv1JqgAB4vlOEyGZGnKUnjQIjUW3pypXKaHc1biCSmJCYxVWbAJdw3bKR92ffIIkKQja0Zo=
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
 volumes:
   clickhouse_data:
   clickhouse_logs:
+  node_modules:
+  next_cache:

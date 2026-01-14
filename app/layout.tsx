@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+"use client";
+
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Providers } from "@/components/providers";
+import { TamboProviderWrapper } from "@/components/providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,22 +14,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Hawkeyes - ClickHouse SQL View Runner",
-  description: "AI-powered ClickHouse SQL view runner with Tambo",
-};
-
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" className="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <TamboProviderWrapper>{children}</TamboProviderWrapper>
       </body>
     </html>
   );

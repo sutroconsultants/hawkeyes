@@ -1,23 +1,25 @@
 "use client";
 
 import * as React from "react";
-import {
-  TamboProvider,
-} from "@tambo-ai/react";
-import { clickhouseTools, executeQueryTool } from "@/lib/tambo-tools";
-import { DataChart, DataTable, QuerySuggestion } from "@/components/tambo";
+import { TamboProvider, type InitialTamboThreadMessage } from "@tambo-ai/react";
+import { TamboMcpProvider } from "@tambo-ai/react/mcp";
+import { clickhouseTools } from "@/lib/tambo-tools";
+import { QuerySuggestion } from "@/components/tambo";
 
 const systemInstructions = `You help users query EBMUD water utility data in ClickHouse.
 
-When answering questions:
-1. Always use get_table_schema to confirm relevant columns before writing queries
-2. Always use execute_clickhouse_query to answer data questions; do not answer from memory
-3. Describe results clearly in plain English
-4. After executing a query, render a QuerySuggestion component with the SQL (do not paste raw SQL unless asked)`;
+Available tables in the ebmud database:
+- work_orders: columns include work_order_id, priority (enum: 'emergency','urgent','high','medium','low'), status, description, location_address, city, requested_by
+- hydrants, hydrant_inspections, valves, valve_exercises, mains, main_breaks, pressure_zones, critical_users, claims
+
+When answering questions, directly use execute_clickhouse_query with a SQL query like:
+SELECT * FROM ebmud.work_orders WHERE priority = 'emergency' LIMIT 100
+
+Describe results in plain English after the query runs.`;
 
 const systemInstructionsHelper = () => systemInstructions;
 
-interface ProvidersProps {
+interface TamboProviderWrapperProps {
   children: React.ReactNode;
 }
 
@@ -30,14 +32,19 @@ export function useTamboConfig() {
   return React.useContext(TamboConfigContext);
 }
 
-export function Providers({ children }: ProvidersProps) {
+export function TamboProviderWrapper({ children }: TamboProviderWrapperProps) {
   const apiKey = process.env.NEXT_PUBLIC_TAMBO_API_KEY;
-  const tamboComponents = React.useMemo(
+  const initialMessages = React.useMemo<InitialTamboThreadMessage[]>(
     () => [
-      DataTable,
-      DataChart,
-      { ...QuerySuggestion, associatedTools: [executeQueryTool] },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "I help you query EBMUD water utility data in ClickHouse. Ask me about work orders, hydrants, valves, mains, or other utility data." }],
+      },
     ],
+    []
+  );
+  const tamboComponents = React.useMemo(
+    () => [QuerySuggestion],  // Removed associatedTools to test
     []
   );
 
@@ -59,8 +66,12 @@ export function Providers({ children }: ProvidersProps) {
         tools={clickhouseTools}
         components={tamboComponents}
         contextHelpers={{ system_instructions: systemInstructionsHelper }}
+        initialMessages={initialMessages}
+        streaming={false}
       >
-        {children}
+        <TamboMcpProvider>
+          {children}
+        </TamboMcpProvider>
       </TamboProvider>
     </TamboConfigContext.Provider>
   );

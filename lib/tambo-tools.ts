@@ -1,7 +1,7 @@
-import { z } from "zod";
 import type { TamboTool } from "@tambo-ai/react";
+import { QUERY_SUGGESTION_EVENT } from "@/lib/tambo-events";
 
-// Tool to list all tables in ClickHouse
+// Tool to list all tables in ClickHouse (using raw JSON Schema)
 export const listTablesTool: TamboTool = {
   name: "list_clickhouse_tables",
   description: `List all tables in the ClickHouse database. Returns table names, databases, row counts, and sizes.
@@ -19,31 +19,24 @@ The main database is 'ebmud' which contains water utility data:
 - critical_users: Hospitals, schools, fire stations
 - claims: Property damage claims`,
   tool: async () => {
-    try {
-      const response = await fetch("/api/clickhouse/tables");
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch tables");
-      }
-      return data.tables;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(`Failed to fetch tables: ${String(err)}`);
+    const response = await fetch("/api/clickhouse/tables");
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to fetch tables");
     }
+    return data.tables;
   },
-  inputSchema: z.object({}),
-  outputSchema: z.array(z.object({
-    name: z.string(),
-    database: z.string(),
-    engine: z.string(),
-    total_rows: z.string(),
-    total_bytes: z.string(),
-  })),
+  inputSchema: {
+    type: "object",
+    properties: {},
+  },
+  outputSchema: {},
+  transformToContent: (result) => [
+    { type: "text", text: JSON.stringify(result, null, 2) },
+  ],
 };
 
-// Tool to get columns/schema for a specific table
+// Tool to get columns/schema for a specific table (using raw JSON Schema)
 export const getTableSchemaTool: TamboTool = {
   name: "get_table_schema",
   description: `Get the column schema for a specific ClickHouse table. Returns column names and types.
@@ -56,32 +49,30 @@ Common enum values:
 - status: 'active', 'inactive', 'completed', 'open', etc.
 - work_type: 'repair', 'replacement', 'inspection', 'maintenance', 'emergency'`,
   tool: async ({ database, table }: { database: string; table: string }) => {
-    try {
-      const response = await fetch(`/api/clickhouse/columns?database=${database}&table=${table}`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch table schema");
-      }
-      return data.columns;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(`Failed to fetch table schema: ${String(err)}`);
+    const response = await fetch(`/api/clickhouse/columns?database=${database}&table=${table}`);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to fetch table schema");
     }
+    // Return simplified schema with just name and type
+    const simplified = data.columns.map((c: { name: string; type: string }) => `${c.name}: ${c.type}`).join(", ");
+    return { table: `${database}.${table}`, columns: simplified };
   },
-  inputSchema: z.object({
-    database: z.string().describe("The database name (usually 'ebmud')"),
-    table: z.string().describe("The table name"),
-  }),
-  outputSchema: z.array(z.object({
-    name: z.string(),
-    type: z.string(),
-    comment: z.string().optional(),
-  })),
+  inputSchema: {
+    type: "object",
+    properties: {
+      database: { type: "string", description: "The database name (usually 'ebmud')" },
+      table: { type: "string", description: "The table name" },
+    },
+    required: ["database", "table"],
+  },
+  outputSchema: {},
+  transformToContent: (result) => [
+    { type: "text", text: `Table ${result.table} columns: ${result.columns}` },
+  ],
 };
 
-// Tool to execute a SQL query
+// Tool to execute a SQL query (using raw JSON Schema)
 export const executeQueryTool: TamboTool = {
   name: "execute_clickhouse_query",
   description: `Execute a SQL query against ClickHouse and return results.
@@ -96,49 +87,49 @@ After running a query, describe the results in plain English and render a QueryS
 
 Example: SELECT * FROM ebmud.work_orders WHERE priority = 'emergency' LIMIT 100`,
   tool: async ({ query }: { query: string }) => {
-    try {
-      const response = await fetch("/api/clickhouse/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
+    const response = await fetch("/api/clickhouse/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!response.ok) {
-        const errorMessage = data.details || data.error || `Query failed with status ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      return {
-        data: data.data,
-        rowCount: data.rows,
-        statistics: data.statistics,
-        executedQuery: query,
-      };
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(`Failed to execute query: ${String(err)}`);
+    if (!response.ok) {
+      const errorMessage = data.details || data.error || `Query failed with status ${response.status}`;
+      throw new Error(errorMessage);
     }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent(QUERY_SUGGESTION_EVENT, {
+          detail: { query, result: { data: data.data, rows: data.rows, statistics: data.statistics } },
+        }),
+      );
+    }
+
+    // Return simplified result - just summary and first few rows for AI context
+    const preview = data.data.slice(0, 3);
+    return {
+      rowCount: data.rows,
+      executedQuery: query,
+      preview: preview,
+    };
   },
-  inputSchema: z.object({
-    query: z.string().describe("The SQL query to execute against ClickHouse. Always include LIMIT clause."),
-  }),
-  outputSchema: z.object({
-    data: z.array(z.any()).describe("The query result rows"),
-    rowCount: z.number().describe("Number of rows returned"),
-    statistics: z.object({
-      elapsed: z.number(),
-      rows_read: z.number(),
-      bytes_read: z.number(),
-    }).optional(),
-    executedQuery: z.string().describe("The SQL query that was executed"),
-  }),
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "The SQL query to execute against ClickHouse. Always include LIMIT clause." },
+    },
+    required: ["query"],
+  },
+  outputSchema: {},
+  transformToContent: (result) => [
+    { type: "text", text: `Query executed: ${result.executedQuery}\nRows returned: ${result.rowCount}\nSample data: ${JSON.stringify(result.preview, null, 2)}` },
+  ],
 };
 
-// Export all tools
+// Export all tools with raw JSON Schema
 export const clickhouseTools = [
   listTablesTool,
   getTableSchemaTool,
