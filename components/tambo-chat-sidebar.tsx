@@ -24,7 +24,7 @@ import {
   ThreadContent,
   ThreadContentMessages,
 } from "@/components/tambo/thread-content";
-import { useTambo, useTamboThread, useTamboThreadInput } from "@tambo-ai/react";
+import { useTambo, useTamboThreadInput } from "@tambo-ai/react";
 
 // Demo prompts based on East Bay Water Authority data
 const DEMO_PROMPTS = [
@@ -36,8 +36,7 @@ const DEMO_PROMPTS = [
 ];
 
 export function TamboChatSidebar({ className }: { className?: string }) {
-  const { startNewThread } = useTambo();
-  const { thread } = useTamboThread();
+  const { startNewThread, thread } = useTambo();
   const { setValue } = useTamboThreadInput();
 
   const hasMessages = thread?.messages && thread.messages.length > 0;

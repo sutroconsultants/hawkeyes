@@ -73,7 +73,7 @@ jobs:
           echo "Waiting for services to start..."
           sleep 90
           echo "Seeding database..."
-          curl -X POST http://${{ env.VM_HOST }}:7900/api/clickhouse/seed || echo "Seed may have already run"
+          curl -X POST http://${{ env.VM_HOST }}/api/clickhouse/seed || echo "Seed may have already run"
           echo ""
           echo "Checking health..."
-          curl -f http://${{ env.VM_HOST }}:7900 || echo "App may still be starting..."
+          curl -f http://${{ env.VM_HOST }} || echo "App may still be starting..."

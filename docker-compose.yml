@@ -30,7 +30,7 @@ services:
     working_dir: /app
     entrypoint: ["/bin/bash", "/app/scripts/docker-entrypoint.sh"]
     ports:
-      - "7900:7900"
+      - "80:7900"
     env_file:
       - .env.local
     environment:
@@ -57,7 +57,7 @@ services:
         echo 'Waiting for web service...'
         sleep 15
         echo 'Seeding database...'
-        curl -X POST http://web:7900/api/clickhouse/seed -f || echo 'Seed failed, may need to retry manually'
+        curl -X POST http://web:7900/api/clickhouse/seed || echo 'Seed failed, may need to retry manually'
         echo 'Seed complete!'
       "
     restart: "no"
