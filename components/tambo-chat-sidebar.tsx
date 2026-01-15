@@ -24,7 +24,8 @@ import {
   ThreadContent,
   ThreadContentMessages,
 } from "@/components/tambo/thread-content";
-import { useTambo, useTamboThreadInput } from "@tambo-ai/react";
+import type { TamboEditor } from "@/components/tambo/text-editor";
+import { useTambo } from "@tambo-ai/react";
 
 // Demo prompts based on East Bay Water Authority data
 const DEMO_PROMPTS = [
@@ -37,16 +38,21 @@ const DEMO_PROMPTS = [
 
 export function TamboChatSidebar({ className }: { className?: string }) {
   const { startNewThread, thread } = useTambo();
-  const { setValue } = useTamboThreadInput();
+  const editorRef = React.useRef<TamboEditor>(null!);
 
   const hasMessages = thread?.messages && thread.messages.length > 0;
 
   const handleDemoPrompt = React.useCallback((prompt: string) => {
-    setValue(prompt);
-  }, [setValue]);
+    if (editorRef.current) {
+      editorRef.current.setContent(prompt);
+      editorRef.current.focus("end");
+    }
+  }, []);
 
   const handleClear = () => {
-    setValue("");
+    if (editorRef.current) {
+      editorRef.current.setContent("");
+    }
     startNewThread();
   };
 
@@ -110,7 +116,7 @@ export function TamboChatSidebar({ className }: { className?: string }) {
 
       {/* Message input */}
       <div className="border-t p-4 shrink-0">
-        <MessageInput>
+        <MessageInput inputRef={editorRef}>
           <MessageInputTextarea placeholder="Ask about your data..." />
           <MessageInputToolbar>
             <MessageInputSubmitButton />

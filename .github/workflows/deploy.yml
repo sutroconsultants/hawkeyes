@@ -9,6 +9,7 @@ env:
   VM_HOST: 136.117.204.81
   VM_USER: deploy
   APP_DIR: /opt/hawkeyes
+  DOMAIN: hawkeye.sutroconsultants.com
 
 jobs:
   deploy:
@@ -47,7 +48,7 @@ jobs:
           # Copy to VM
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/.env.local ${{ env.VM_USER }}@${{ env.VM_HOST }}:${{ env.APP_DIR }}/.env.local
 
-      - name: Deploy
+      - name: Deploy with SSL
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.VM_USER }}@${{ env.VM_HOST }} << 'SSHEOF'
             set -e
@@ -58,12 +59,101 @@ jobs:
             grep -v TAMBO .env.local || true
             echo "NEXT_PUBLIC_TAMBO_API_KEY=***"
 
-            # Make entrypoint executable
+            # Make scripts executable
             chmod +x scripts/docker-entrypoint.sh
+            chmod +x scripts/init-ssl.sh || true
 
-            # Start/restart services (with volume cleanup for fresh DB)
-            sudo docker-compose down -v || true
-            sudo docker-compose up -d
+            # Check if SSL certificates exist
+            CERT_EXISTS=$(sudo docker volume ls | grep -q certbot_conf && \
+              sudo docker run --rm -v hawkeyes_certbot_conf:/etc/letsencrypt alpine \
+              test -f /etc/letsencrypt/live/hawkeye.sutroconsultants.com/fullchain.pem && echo "yes" || echo "no")
+
+            if [ "$CERT_EXISTS" = "yes" ]; then
+              echo "SSL certificates exist, using production config..."
+              # Use the full SSL config
+              cp nginx/nginx.conf nginx/nginx.conf.bak 2>/dev/null || true
+
+              # Restart with production compose (preserves cert volumes)
+              sudo docker-compose -f docker-compose.prod.yml down || true
+              sudo docker-compose -f docker-compose.prod.yml up -d
+            else
+              echo "No SSL certificates found, starting with HTTP-only for initial setup..."
+              # Use init config for certbot challenge
+              cp nginx/nginx-init.conf nginx/nginx.conf
+
+              # Clean start (but don't remove certbot volumes if they exist)
+              sudo docker-compose -f docker-compose.prod.yml down || true
+              sudo docker volume rm hawkeyes_node_modules hawkeyes_next_cache 2>/dev/null || true
+              sudo docker-compose -f docker-compose.prod.yml up -d nginx web clickhouse
+
+              echo "Waiting for services to start..."
+              sleep 30
+
+              echo "Requesting SSL certificate..."
+              sudo docker-compose -f docker-compose.prod.yml run --rm certbot certonly \
+                --webroot \
+                --webroot-path=/var/www/certbot \
+                --email max@sutroconsultants.com \
+                --agree-tos \
+                --no-eff-email \
+                -d hawkeye.sutroconsultants.com || echo "Certbot failed - may need manual setup"
+
+              # Switch to full SSL config
+              cat > nginx/nginx.conf << 'NGINXEOF'
+upstream web {
+    server web:7900;
+}
+
+server {
+    listen 80;
+    server_name hawkeye.sutroconsultants.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name hawkeye.sutroconsultants.com;
+
+    ssl_certificate /etc/letsencrypt/live/hawkeye.sutroconsultants.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hawkeye.sutroconsultants.com/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    location / {
+        proxy_pass http://web;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 86400;
+    }
+}
+NGINXEOF
+
+              # Reload nginx with SSL config
+              sudo docker-compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || \
+                sudo docker-compose -f docker-compose.prod.yml restart nginx
+
+              # Start remaining services
+              sudo docker-compose -f docker-compose.prod.yml up -d
+            fi
 
             echo "Deployment complete!"
           SSHEOF
@@ -71,9 +161,16 @@ jobs:
       - name: Wait for services and seed database
         run: |
           echo "Waiting for services to start..."
-          sleep 90
+          sleep 60
           echo "Seeding database..."
-          curl -X POST http://${{ env.VM_HOST }}/api/clickhouse/seed || echo "Seed may have already run"
+          # Try HTTPS first, fall back to HTTP
+          curl -X POST https://${{ env.DOMAIN }}/api/clickhouse/seed 2>/dev/null || \
+            curl -X POST http://${{ env.VM_HOST }}/api/clickhouse/seed || \
+            echo "Seed may have already run"
           echo ""
           echo "Checking health..."
-          curl -f http://${{ env.VM_HOST }} || echo "App may still be starting..."
+          curl -f https://${{ env.DOMAIN }} 2>/dev/null || \
+            curl -f http://${{ env.VM_HOST }} || \
+            echo "App may still be starting..."
+          echo ""
+          echo "Site should be available at: https://${{ env.DOMAIN }}"

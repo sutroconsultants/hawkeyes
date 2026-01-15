@@ -35,6 +35,7 @@ interface QueryTab {
   result: QueryResult | null;
   error: string | null;
   title: string;
+  customTitle?: string; // User-defined title (overrides auto-generated)
 }
 
 const STORAGE_KEY_TABS = "hawkeyes-query-tabs";
@@ -100,6 +101,12 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
   const [tabs, setTabs] = React.useState<QueryTab[]>([]);
   const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
   const [isMounted, setIsMounted] = React.useState(false);
+
+  // Tab editing and multi-select
+  const [editingTabId, setEditingTabId] = React.useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = React.useState("");
+  const [selectedTabIds, setSelectedTabIds] = React.useState<Set<string>>(new Set());
+  const lastClickedTabRef = React.useRef<string | null>(null);
 
   // Load tabs from localStorage on mount
   React.useEffect(() => {
@@ -176,7 +183,87 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
       }
       return newTabs;
     });
+    // Remove from selection
+    setSelectedTabIds(prev => {
+      const next = new Set(prev);
+      next.delete(tabId);
+      return next;
+    });
   }, [activeTabId]);
+
+  // Close multiple selected tabs
+  const closeSelectedTabs = React.useCallback(() => {
+    if (selectedTabIds.size === 0) return;
+
+    setTabs(prev => {
+      const newTabs = prev.filter(t => !selectedTabIds.has(t.id));
+      // If active tab was closed, switch to another
+      if (activeTabId && selectedTabIds.has(activeTabId) && newTabs.length > 0) {
+        setActiveTabId(newTabs[0].id);
+      } else if (newTabs.length === 0) {
+        setActiveTabId(null);
+      }
+      return newTabs;
+    });
+    setSelectedTabIds(new Set());
+  }, [selectedTabIds, activeTabId]);
+
+  // Handle tab click with shift for multi-select
+  const handleTabClick = React.useCallback((tabId: string, e: React.MouseEvent) => {
+    if (e.shiftKey && lastClickedTabRef.current) {
+      // Shift+click: select range
+      const startIndex = tabs.findIndex(t => t.id === lastClickedTabRef.current);
+      const endIndex = tabs.findIndex(t => t.id === tabId);
+      const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+
+      const newSelection = new Set(selectedTabIds);
+      for (let i = from; i <= to; i++) {
+        newSelection.add(tabs[i].id);
+      }
+      setSelectedTabIds(newSelection);
+    } else if (e.metaKey || e.ctrlKey) {
+      // Cmd/Ctrl+click: toggle selection
+      setSelectedTabIds(prev => {
+        const next = new Set(prev);
+        if (next.has(tabId)) {
+          next.delete(tabId);
+        } else {
+          next.add(tabId);
+        }
+        return next;
+      });
+    } else {
+      // Normal click: clear selection and select tab
+      setSelectedTabIds(new Set());
+      setActiveTabId(tabId);
+    }
+    lastClickedTabRef.current = tabId;
+  }, [tabs, selectedTabIds]);
+
+  // Handle double-click to edit tab name
+  const handleTabDoubleClick = React.useCallback((tabId: string, currentTitle: string) => {
+    setEditingTabId(tabId);
+    setEditingTitle(currentTitle);
+  }, []);
+
+  // Save edited tab name
+  const saveTabName = React.useCallback(() => {
+    if (editingTabId && editingTitle.trim()) {
+      setTabs(prev => prev.map(t =>
+        t.id === editingTabId
+          ? { ...t, customTitle: editingTitle.trim() }
+          : t
+      ));
+    }
+    setEditingTabId(null);
+    setEditingTitle("");
+  }, [editingTabId, editingTitle]);
+
+  // Cancel editing
+  const cancelEditing = React.useCallback(() => {
+    setEditingTabId(null);
+    setEditingTitle("");
+  }, []);
 
   const executeQuery = React.useCallback(async () => {
     if (!query?.trim()) return;
@@ -360,36 +447,74 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
           <div className="border-b bg-muted/30">
             <ScrollArea className="w-full">
               <div className="flex items-center px-2 py-1 gap-1">
-                {tabs.map((tab) => (
-                  <div
-                    key={tab.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setActiveTabId(tab.id)}
-                    onKeyDown={(e) => e.key === "Enter" && setActiveTabId(tab.id)}
-                    className={`
-                      flex items-center gap-2 px-3 py-1.5 text-xs rounded-md cursor-pointer
-                      max-w-[200px] group shrink-0
-                      ${activeTabId === tab.id
-                        ? "bg-background border shadow-sm"
-                        : "hover:bg-muted/50 text-muted-foreground"
-                      }
-                    `}
-                  >
-                    <span className="truncate font-mono">
-                      {tab.title}
-                    </span>
-                    {tab.error && (
-                      <span className="w-2 h-2 rounded-full bg-destructive shrink-0" />
-                    )}
-                    <button
-                      onClick={(e) => closeTab(tab.id, e)}
-                      className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 shrink-0"
+                {tabs.map((tab) => {
+                  const displayTitle = tab.customTitle || tab.title;
+                  const isSelected = selectedTabIds.has(tab.id);
+                  const isEditing = editingTabId === tab.id;
+
+                  return (
+                    <div
+                      key={tab.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => handleTabClick(tab.id, e)}
+                      onDoubleClick={() => handleTabDoubleClick(tab.id, displayTitle)}
+                      onKeyDown={(e) => e.key === "Enter" && setActiveTabId(tab.id)}
+                      className={`
+                        flex items-center gap-2 px-3 py-1.5 text-xs rounded-md cursor-pointer
+                        max-w-[200px] group shrink-0 transition-colors
+                        ${activeTabId === tab.id
+                          ? "bg-background border shadow-sm"
+                          : isSelected
+                          ? "bg-primary/20 border border-primary/50"
+                          : "hover:bg-muted/50 text-muted-foreground"
+                        }
+                      `}
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onBlur={saveTabName}
+                          onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key === "Enter") saveTabName();
+                            if (e.key === "Escape") cancelEditing();
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                          className="bg-transparent border-b border-primary outline-none w-full font-mono text-xs"
+                        />
+                      ) : (
+                        <span className="truncate font-mono" title={displayTitle}>
+                          {displayTitle}
+                        </span>
+                      )}
+                      {tab.error && (
+                        <span className="w-2 h-2 rounded-full bg-destructive shrink-0" />
+                      )}
+                      <button
+                        onClick={(e) => closeTab(tab.id, e)}
+                        className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 shrink-0"
+                        title="Close tab"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {/* Close selected tabs button */}
+                {selectedTabIds.size > 1 && (
+                  <button
+                    onClick={closeSelectedTabs}
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 shrink-0 ml-2"
+                    title={`Close ${selectedTabIds.size} selected tabs`}
+                  >
+                    <X className="h-3 w-3" />
+                    Close {selectedTabIds.size}
+                  </button>
+                )}
               </div>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>

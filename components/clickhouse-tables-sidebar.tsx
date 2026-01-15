@@ -103,7 +103,7 @@ export function ClickHouseTablesSidebar({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5" />
-            <span className="font-semibold">EBMUD Database</span>
+            <span className="font-semibold">HawkEye</span>
           </div>
           <Button
             variant="ghost"

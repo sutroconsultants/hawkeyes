@@ -1,0 +1,94 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: hawkeyes-clickhouse
+    # No external ports - only accessible from within docker network
+    expose:
+      - "8123"
+      - "9000"
+    tmpfs:
+      - /var/lib/clickhouse
+      - /var/log/clickhouse-server
+    environment:
+      - CLICKHOUSE_DB=hawkeyes
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=clickhouse
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    image: node:22-bookworm
+    container_name: hawkeyes-web
+    working_dir: /app
+    entrypoint: ["/bin/bash", "/app/scripts/docker-entrypoint.sh"]
+    expose:
+      - "7900"
+    env_file:
+      - .env.local
+    environment:
+      - CLICKHOUSE_HOST=http://clickhouse:8123
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - next_cache:/app/.next
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: hawkeyes-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    container_name: hawkeyes-certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_conf:/etc/letsencrypt
+    # Run renewal check twice daily
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    restart: unless-stopped
+
+  # Seed container - runs once after services are up
+  seed:
+    image: curlimages/curl:latest
+    container_name: hawkeyes-seed
+    depends_on:
+      web:
+        condition: service_started
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for web service...'
+        sleep 15
+        echo 'Seeding database...'
+        curl -X POST http://web:7900/api/clickhouse/seed || echo 'Seed failed, may need to retry manually'
+        echo 'Seed complete!'
+      "
+    restart: "no"
+
+volumes:
+  node_modules:
+  next_cache:
+  certbot_www:
+  certbot_conf:
