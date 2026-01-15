@@ -24,7 +24,7 @@ import {
   ThreadContent,
   ThreadContentMessages,
 } from "@/components/tambo/thread-content";
-import { useTambo, useTamboThreadInput } from "@tambo-ai/react";
+import { useTambo, useTamboThread, useTamboThreadInput } from "@tambo-ai/react";
 
 // Demo prompts based on EBMUD water utility data
 const DEMO_PROMPTS = [
@@ -37,7 +37,10 @@ const DEMO_PROMPTS = [
 
 export function TamboChatSidebar({ className }: { className?: string }) {
   const { startNewThread } = useTambo();
+  const { thread } = useTamboThread();
   const { setValue } = useTamboThreadInput();
+
+  const hasMessages = thread?.messages && thread.messages.length > 0;
 
   const handleDemoPrompt = React.useCallback((prompt: string) => {
     setValue(prompt);
@@ -88,6 +91,19 @@ export function TamboChatSidebar({ className }: { className?: string }) {
 
       {/* Message thread content */}
       <ScrollableMessageContainer className="flex-1 p-4">
+        {!hasMessages && (
+          <div className="text-muted-foreground text-sm space-y-3">
+            <p>
+              I can help you query and explore your EBMUD water utility data.
+              Ask me questions like:
+            </p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Show me all emergency work orders</li>
+              <li>What hydrants failed inspection recently?</li>
+              <li>Find main breaks on a specific street</li>
+            </ul>
+          </div>
+        )}
         <ThreadContent>
           <ThreadContentMessages />
         </ThreadContent>

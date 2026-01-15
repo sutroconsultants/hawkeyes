@@ -1,0 +1,60 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  VM_HOST: 136.117.204.81
+  VM_USER: deploy
+  APP_DIR: /opt/hawkeyes
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.VM_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy files to VM
+        run: |
+          rsync -avz --exclude='.git' --exclude='node_modules' --exclude='.next' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./ ${{ env.VM_USER }}@${{ env.VM_HOST }}:${{ env.APP_DIR }}/
+
+      - name: Create env file and deploy
+        env:
+          TAMBO_API_KEY: ${{ secrets.TAMBO_API_KEY }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.VM_USER }}@${{ env.VM_HOST }} << EOF
+            set -e
+            cd ${{ env.APP_DIR }}
+
+            # Create .env.local
+            cat > .env.local << ENVEOF
+          NEXT_PUBLIC_TAMBO_API_KEY=${TAMBO_API_KEY}
+          CLICKHOUSE_HOST=http://clickhouse:8123
+          CLICKHOUSE_USER=default
+          CLICKHOUSE_PASSWORD=clickhouse
+          CLICKHOUSE_DATABASE=hawkeyes
+          ENVEOF
+
+            # Start/restart services
+            sudo docker-compose down || true
+            sudo docker-compose up -d --build
+
+            echo "Deployment complete!"
+          EOF
+
+      - name: Health check
+        run: |
+          sleep 45
+          curl -f http://${{ env.VM_HOST }}:7900 || echo "App may still be starting..."

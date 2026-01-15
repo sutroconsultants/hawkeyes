@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { TamboProvider, type InitialTamboThreadMessage } from "@tambo-ai/react";
+import { TamboProvider } from "@tambo-ai/react";
 import { TamboMcpProvider } from "@tambo-ai/react/mcp";
 import { clickhouseTools } from "@/lib/tambo-tools";
 import { QuerySuggestion } from "@/components/tambo";
@@ -34,15 +34,6 @@ export function useTamboConfig() {
 
 export function TamboProviderWrapper({ children }: TamboProviderWrapperProps) {
   const apiKey = process.env.NEXT_PUBLIC_TAMBO_API_KEY;
-  const initialMessages = React.useMemo<InitialTamboThreadMessage[]>(
-    () => [
-      {
-        role: "assistant",
-        content: [{ type: "text", text: "I help you query EBMUD water utility data in ClickHouse. Ask me about work orders, hydrants, valves, mains, or other utility data." }],
-      },
-    ],
-    []
-  );
   const tamboComponents = React.useMemo(
     () => [QuerySuggestion],  // Removed associatedTools to test
     []
@@ -66,8 +57,7 @@ export function TamboProviderWrapper({ children }: TamboProviderWrapperProps) {
         tools={clickhouseTools}
         components={tamboComponents}
         contextHelpers={{ system_instructions: systemInstructionsHelper }}
-        initialMessages={initialMessages}
-        streaming={false}
+        streaming={true}
       >
         <TamboMcpProvider>
           {children}
