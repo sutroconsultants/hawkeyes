@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({
-      message: "Database reset complete - all EBMUD tables dropped",
+      message: "Database reset complete - all East Bay Water tables dropped",
     });
   } catch (error) {
     console.error("Reset failed:", error);

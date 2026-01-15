@@ -6,7 +6,7 @@ export const listTablesTool: TamboTool = {
   name: "list_clickhouse_tables",
   description: `List all tables in the ClickHouse database. Returns table names, databases, row counts, and sizes.
 
-The main database is 'ebmud' which contains water utility data:
+The main database is 'eastbay_water' which contains water utility data:
 - hydrants: Fire hydrant assets
 - hydrant_inspections: Inspection records for hydrants
 - valves: Water system valves
@@ -61,7 +61,7 @@ Common enum values:
   inputSchema: {
     type: "object",
     properties: {
-      database: { type: "string", description: "The database name (usually 'ebmud')" },
+      database: { type: "string", description: "The database name (usually 'eastbay_water')" },
       table: { type: "string", description: "The table name" },
     },
     required: ["database", "table"],
@@ -80,12 +80,12 @@ export const executeQueryTool: TamboTool = {
 IMPORTANT QUERY RULES:
 1. Always use LIMIT (default 100)
 2. For Enum columns use string values: WHERE priority = 'emergency'
-3. Use ebmud database: SELECT * FROM ebmud.table_name
+3. Use eastbay_water database: SELECT * FROM eastbay_water.table_name
 4. Only use columns that exist in the table - check schema first with get_table_schema
 
 After running a query, describe the results in plain English and render a QuerySuggestion component using the executedQuery from the tool result. Avoid raw SQL unless the user asks.
 
-Example: SELECT * FROM ebmud.work_orders WHERE priority = 'emergency' LIMIT 100`,
+Example: SELECT * FROM eastbay_water.work_orders WHERE priority = 'emergency' LIMIT 100`,
   tool: async ({ query }: { query: string }) => {
     const response = await fetch("/api/clickhouse/query", {
       method: "POST",
