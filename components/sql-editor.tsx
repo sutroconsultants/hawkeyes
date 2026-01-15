@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Play, Loader2, Copy, Check, Download, X } from "lucide-react";
+import { Play, Loader2, Copy, Check, Download, X, ChevronDown } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql } from "@codemirror/lang-sql";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -17,7 +17,170 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { QUERY_SUGGESTION_EVENT } from "@/lib/tambo-events";
+
+// Complex query examples for the dropdown
+const QUERY_EXAMPLES = [
+  {
+    category: "JOINs",
+    queries: [
+      {
+        name: "Work Orders with Main Break Details",
+        query: `SELECT
+  wo.work_order_id,
+  wo.priority,
+  wo.status,
+  wo.description,
+  mb.break_date,
+  mb.cause,
+  mb.estimated_gallons_lost,
+  m.material,
+  m.diameter as pipe_diameter
+FROM hawkeye.work_orders wo
+JOIN hawkeye.main_breaks mb ON wo.asset_id = mb.break_id
+JOIN hawkeye.mains m ON mb.main_id = m.main_id
+WHERE wo.work_type = 'repair'
+ORDER BY mb.break_date DESC
+LIMIT 50`,
+      },
+      {
+        name: "Hydrant Inspections with Location",
+        query: `SELECT
+  h.hydrant_id,
+  h.location_address,
+  h.city,
+  hi.inspection_date,
+  hi.result,
+  hi.inspector_name,
+  hi.static_pressure,
+  hi.flow_rate
+FROM hawkeye.hydrants h
+JOIN hawkeye.hydrant_inspections hi ON h.hydrant_id = hi.hydrant_id
+WHERE hi.result = 'fail'
+ORDER BY hi.inspection_date DESC
+LIMIT 100`,
+      },
+      {
+        name: "Valve Exercises by Pressure Zone",
+        query: `SELECT
+  v.valve_id,
+  v.valve_type,
+  v.location_address,
+  pz.zone_name,
+  ve.exercise_date,
+  ve.result,
+  ve.turns_achieved,
+  ve.turns_expected
+FROM hawkeye.valves v
+JOIN hawkeye.pressure_zones pz ON v.pressure_zone = pz.zone_id
+JOIN hawkeye.valve_exercises ve ON v.valve_id = ve.valve_id
+WHERE ve.result != 'pass'
+ORDER BY ve.exercise_date DESC
+LIMIT 100`,
+      },
+    ],
+  },
+  {
+    category: "Aggregations",
+    queries: [
+      {
+        name: "Work Orders by Priority (Count)",
+        query: `SELECT
+  priority,
+  status,
+  count(*) as order_count,
+  round(avg(total_cost), 2) as avg_cost
+FROM hawkeye.work_orders
+GROUP BY priority, status
+ORDER BY priority, status`,
+      },
+      {
+        name: "Main Breaks by Year and Cause",
+        query: `SELECT
+  toYear(break_date) as year,
+  cause,
+  count(*) as break_count,
+  sum(estimated_gallons_lost) as total_gallons_lost,
+  round(avg(total_repair_cost), 2) as avg_repair_cost
+FROM hawkeye.main_breaks
+GROUP BY year, cause
+ORDER BY year DESC, break_count DESC`,
+      },
+      {
+        name: "Hydrant Inspection Pass Rate by City",
+        query: `SELECT
+  h.city,
+  count(*) as total_inspections,
+  countIf(hi.result = 'pass') as passed,
+  countIf(hi.result = 'fail') as failed,
+  round(countIf(hi.result = 'pass') * 100.0 / count(*), 1) as pass_rate_pct
+FROM hawkeye.hydrant_inspections hi
+JOIN hawkeye.hydrants h ON hi.hydrant_id = h.hydrant_id
+GROUP BY h.city
+ORDER BY total_inspections DESC`,
+      },
+      {
+        name: "Critical Users by Type and Priority",
+        query: `SELECT
+  facility_type,
+  priority_level,
+  count(*) as facility_count
+FROM hawkeye.critical_users
+GROUP BY facility_type, priority_level
+ORDER BY facility_type, priority_level`,
+      },
+    ],
+  },
+  {
+    category: "Subqueries & CTEs",
+    queries: [
+      {
+        name: "Mains with Above-Average Breaks",
+        query: `WITH avg_breaks AS (
+  SELECT avg(break_history_count) as avg_count
+  FROM hawkeye.mains
+)
+SELECT
+  m.main_id,
+  m.street_name,
+  m.material,
+  m.diameter,
+  m.break_history_count,
+  m.condition_score
+FROM hawkeye.mains m, avg_breaks
+WHERE m.break_history_count > avg_breaks.avg_count
+ORDER BY m.break_history_count DESC
+LIMIT 50`,
+      },
+      {
+        name: "Recent Claims with Break Info",
+        query: `SELECT
+  c.claim_id,
+  c.claimant_name,
+  c.claim_type,
+  c.claimed_amount,
+  c.status,
+  mb.break_date,
+  mb.cause,
+  m.street_name
+FROM hawkeye.claims c
+JOIN hawkeye.main_breaks mb ON c.main_break_id = mb.break_id
+JOIN hawkeye.mains m ON mb.main_id = m.main_id
+WHERE c.incident_date >= today() - 365
+ORDER BY c.claimed_amount DESC
+LIMIT 50`,
+      },
+    ],
+  },
+];
 
 interface QueryResult {
   data: Record<string, unknown>[];
@@ -404,7 +567,36 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
       {/* Query Editor Section */}
       <div className="border-b">
         <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
-          <h2 className="text-sm font-semibold">SQL Query</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold">SQL Query</h2>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs">
+                  Examples
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                {QUERY_EXAMPLES.map((category, idx) => (
+                  <React.Fragment key={category.category}>
+                    {idx > 0 && <DropdownMenuSeparator />}
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      {category.category}
+                    </DropdownMenuLabel>
+                    {category.queries.map((example) => (
+                      <DropdownMenuItem
+                        key={example.name}
+                        onClick={() => setQuery(example.query)}
+                        className="text-xs cursor-pointer"
+                      >
+                        {example.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <Button
             onClick={executeQuery}
             disabled={isLoading || !query?.trim()}
