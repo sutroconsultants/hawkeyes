@@ -40,6 +40,7 @@ jobs:
           CLICKHOUSE_USER=default
           CLICKHOUSE_PASSWORD=clickhouse
           CLICKHOUSE_DATABASE=hawkeye
+          NEXT_PUBLIC_MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
           EOF
 
           # Remove leading whitespace from each line
