@@ -51,7 +51,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const client = getClickHouseClient();
 
-    // Drop all tables in ebmud database
+    // Drop all tables in eastbay_water database
     const tables = [
       "claims",
       "documents",
@@ -69,7 +69,7 @@ export async function DELETE(request: NextRequest) {
     for (const table of tables) {
       try {
         await client.command({
-          query: `DROP TABLE IF EXISTS ebmud.${table}`,
+          query: `DROP TABLE IF EXISTS eastbay_water.${table}`,
         });
       } catch (error) {
         console.error(`Failed to drop ${table}:`, error);
@@ -78,7 +78,7 @@ export async function DELETE(request: NextRequest) {
 
     // Drop the database
     await client.command({
-      query: "DROP DATABASE IF EXISTS ebmud",
+      query: "DROP DATABASE IF EXISTS eastbay_water",
     });
 
     return NextResponse.json({

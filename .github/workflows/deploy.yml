@@ -30,31 +30,50 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             ./ ${{ env.VM_USER }}@${{ env.VM_HOST }}:${{ env.APP_DIR }}/
 
-      - name: Create env file and deploy
-        env:
-          TAMBO_API_KEY: ${{ secrets.TAMBO_API_KEY }}
+      - name: Create env file
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.VM_USER }}@${{ env.VM_HOST }} << EOF
-            set -e
-            cd ${{ env.APP_DIR }}
-
-            # Create .env.local
-            cat > .env.local << ENVEOF
-          NEXT_PUBLIC_TAMBO_API_KEY=${TAMBO_API_KEY}
+          # Create env file locally
+          cat > /tmp/.env.local << EOF
+          NEXT_PUBLIC_TAMBO_API_KEY=${{ secrets.TAMBO_API_KEY }}
           CLICKHOUSE_HOST=http://clickhouse:8123
           CLICKHOUSE_USER=default
           CLICKHOUSE_PASSWORD=clickhouse
-          CLICKHOUSE_DATABASE=hawkeyes
-          ENVEOF
-
-            # Start/restart services
-            sudo docker-compose down || true
-            sudo docker-compose up -d --build
-
-            echo "Deployment complete!"
+          CLICKHOUSE_DATABASE=eastbay_water
           EOF
 
-      - name: Health check
+          # Remove leading whitespace from each line
+          sed -i 's/^[[:space:]]*//' /tmp/.env.local
+
+          # Copy to VM
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no /tmp/.env.local ${{ env.VM_USER }}@${{ env.VM_HOST }}:${{ env.APP_DIR }}/.env.local
+
+      - name: Deploy
         run: |
-          sleep 45
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.VM_USER }}@${{ env.VM_HOST }} << 'SSHEOF'
+            set -e
+            cd /opt/hawkeyes
+
+            # Verify env file (mask sensitive values)
+            echo "Checking .env.local:"
+            grep -v TAMBO .env.local || true
+            echo "NEXT_PUBLIC_TAMBO_API_KEY=***"
+
+            # Make entrypoint executable
+            chmod +x scripts/docker-entrypoint.sh
+
+            # Start/restart services (with volume cleanup for fresh DB)
+            sudo docker-compose down -v || true
+            sudo docker-compose up -d
+
+            echo "Deployment complete!"
+          SSHEOF
+
+      - name: Wait for services and seed database
+        run: |
+          echo "Waiting for services to start..."
+          sleep 90
+          echo "Seeding database..."
+          curl -X POST http://${{ env.VM_HOST }}:7900/api/clickhouse/seed || echo "Seed may have already run"
+          echo ""
+          echo "Checking health..."
           curl -f http://${{ env.VM_HOST }}:7900 || echo "App may still be starting..."

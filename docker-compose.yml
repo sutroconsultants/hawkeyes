@@ -5,9 +5,10 @@ services:
     ports:
       - "7800:8123"  # HTTP interface
       - "9000:9000"  # Native TCP interface
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-      - clickhouse_logs:/var/log/clickhouse-server
+    # Use tmpfs for ephemeral data (fresh on each startup)
+    tmpfs:
+      - /var/lib/clickhouse
+      - /var/log/clickhouse-server
     environment:
       - CLICKHOUSE_DB=hawkeyes
       - CLICKHOUSE_USER=default
@@ -19,23 +20,21 @@ services:
         hard: 262144
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   web:
     image: node:22-bookworm
     container_name: hawkeyes-web
     working_dir: /app
-    command: >
-      sh -c "npm install -g npm@11.7.0 && npm install && npm run dev -- --hostname 0.0.0.0 --port 7900"
+    entrypoint: ["/bin/bash", "/app/scripts/docker-entrypoint.sh"]
     ports:
       - "7900:7900"
     env_file:
       - .env.local
     environment:
       - CLICKHOUSE_HOST=http://clickhouse:8123
-      - NEXT_PUBLIC_TAMBO_API_KEY=tambo_9b/fvma7Z7J0ZKZ9nemPMy+OZzrtAiaurVR8wv1JqgAB4vlOEyGZGnKUnjQIjUW3pypXKaHc1biCSmJCYxVWbAJdw3bKR92ffIIkKQja0Zo=
       - NEXT_TELEMETRY_DISABLED=1
     volumes:
       - .:/app
@@ -45,8 +44,24 @@ services:
       clickhouse:
         condition: service_healthy
 
+  # Seed container - runs once after services are up
+  seed:
+    image: curlimages/curl:latest
+    container_name: hawkeyes-seed
+    depends_on:
+      web:
+        condition: service_started
+    # Wait for web to be ready, then seed
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for web service...'
+        sleep 15
+        echo 'Seeding database...'
+        curl -X POST http://web:7900/api/clickhouse/seed -f || echo 'Seed failed, may need to retry manually'
+        echo 'Seed complete!'
+      "
+    restart: "no"
+
 volumes:
-  clickhouse_data:
-  clickhouse_logs:
   node_modules:
   next_cache:

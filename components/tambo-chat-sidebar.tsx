@@ -26,7 +26,7 @@ import {
 } from "@/components/tambo/thread-content";
 import { useTambo, useTamboThread, useTamboThreadInput } from "@tambo-ai/react";
 
-// Demo prompts based on EBMUD water utility data
+// Demo prompts based on East Bay Water Authority data
 const DEMO_PROMPTS = [
   "Are there any emergency work orders that I have to deal with?",
   "Any main breaks at Fruitvale Ave?",
@@ -94,7 +94,7 @@ export function TamboChatSidebar({ className }: { className?: string }) {
         {!hasMessages && (
           <div className="text-muted-foreground text-sm space-y-3">
             <p>
-              I can help you query and explore your EBMUD water utility data.
+              I can help you query and explore your water utility data.
               Ask me questions like:
             </p>
             <ul className="list-disc pl-4 space-y-1">
