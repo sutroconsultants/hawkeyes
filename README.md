@@ -1,6 +1,6 @@
 # Hawkeyes
 
-A ClickHouse SQL viewer with an AI assistant powered by Tambo. Built for querying EBMUD water utility data.
+A ClickHouse SQL viewer with an AI assistant powered by Tambo. Built for querying water utility data.
 
 ## Features
 
@@ -71,7 +71,7 @@ docker-compose down && docker-compose up -d --build
 
 ### Seeding the Database
 
-To seed the ClickHouse database with sample EBMUD data:
+To seed the ClickHouse database with sample water utility data:
 ```bash
 curl -X POST http://localhost:7900/api/clickhouse/seed
 ```

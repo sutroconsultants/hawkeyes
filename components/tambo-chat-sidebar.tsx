@@ -27,7 +27,7 @@ import {
 import type { TamboEditor } from "@/components/tambo/text-editor";
 import { useTambo } from "@tambo-ai/react";
 
-// Demo prompts based on East Bay Water Authority data
+// Demo prompts for water utility data exploration
 const DEMO_PROMPTS = [
   "Are there any emergency work orders that I have to deal with?",
   "Any main breaks at Fruitvale Ave?",

@@ -10,7 +10,7 @@ import type { TamboComponent } from "@tambo-ai/react";
 
 // Props schema for Tambo AI to understand
 export const QueryConfirmationPropsSchema = z.object({
-  sql: z.string().describe("The complete SQL query to execute. Example: 'SELECT * FROM eastbay_water.work_orders WHERE priority = \\'emergency\\' LIMIT 100'. This MUST contain the actual query text."),
+  sql: z.string().describe("The complete SQL query to execute. Example: 'SELECT * FROM hawkeye.work_orders WHERE priority = \\'emergency\\' LIMIT 100'. This MUST contain the actual query text."),
   summary: z.string().describe("A brief 1-2 sentence description of what the query returns. Example: 'Shows all emergency work orders from the database.'"),
 });
 

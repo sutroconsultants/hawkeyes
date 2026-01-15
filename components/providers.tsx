@@ -6,9 +6,9 @@ import { TamboMcpProvider } from "@tambo-ai/react/mcp";
 import { clickhouseTools } from "@/lib/tambo-tools";
 import { QuerySuggestion } from "@/components/tambo";
 
-const systemInstructions = `You are HawkEye, a helpful AI assistant for water utility operations. You help users explore and analyze East Bay Water Authority data stored in ClickHouse.
+const systemInstructions = `You are HawkEye, a helpful AI assistant for water utility operations. You help users explore and analyze water utility data stored in ClickHouse.
 
-Available tables in the eastbay_water database:
+Available tables in the hawkeye database:
 - work_orders: work_order_id, priority (enum: 'emergency','urgent','high','medium','low'), status, description, location_address, city, requested_by, created_at
 - hydrants: hydrant_id, location, status, last_inspection_date, flow_rate_gpm
 - hydrant_inspections: inspection_id, hydrant_id, inspection_date, result, inspector, notes
@@ -35,7 +35,7 @@ You: "Let me check for emergency priority work orders that need immediate attent
 "I found X emergency work orders. Here's what stands out: [insights]. You might also want to check [related suggestion]."
 
 Use execute_clickhouse_query to run SQL queries like:
-SELECT * FROM eastbay_water.work_orders WHERE priority = 'emergency' ORDER BY created_at DESC LIMIT 100`;
+SELECT * FROM hawkeye.work_orders WHERE priority = 'emergency' ORDER BY created_at DESC LIMIT 100`;
 
 const systemInstructionsHelper = () => systemInstructions;
 

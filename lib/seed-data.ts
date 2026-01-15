@@ -1,5 +1,5 @@
-// East Bay Water Authority Demo Data Seed Script
-// This creates realistic water utility data for the Oakland/East Bay area
+// HawkEye Water Utility Demo Data Seed Script
+// This creates realistic water utility data for demonstration
 // Note: This is fictional data for demonstration purposes
 
 export const seedStatements: string[] = [];
@@ -9,12 +9,12 @@ export const seedStatements: string[] = [];
 // ============================================================================
 
 seedStatements.push(`
-CREATE DATABASE IF NOT EXISTS eastbay_water
+CREATE DATABASE IF NOT EXISTS hawkeye
 `);
 
 // Pressure Zones
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.pressure_zones (
+CREATE TABLE IF NOT EXISTS hawkeye.pressure_zones (
   zone_id String,
   zone_name String,
   min_pressure Float32,
@@ -29,7 +29,7 @@ ORDER BY zone_id
 
 // Critical Users (hospitals, schools, nursing homes)
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.critical_users (
+CREATE TABLE IF NOT EXISTS hawkeye.critical_users (
   facility_id String,
   facility_name String,
   facility_type Enum8('hospital' = 1, 'school' = 2, 'nursing_home' = 3, 'fire_station' = 4, 'government' = 5),
@@ -48,7 +48,7 @@ ORDER BY facility_id
 
 // Hydrants
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.hydrants (
+CREATE TABLE IF NOT EXISTS hawkeye.hydrants (
   hydrant_id String,
   location_address String,
   cross_street String,
@@ -75,7 +75,7 @@ ORDER BY hydrant_id
 
 // Hydrant Inspections
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.hydrant_inspections (
+CREATE TABLE IF NOT EXISTS hawkeye.hydrant_inspections (
   inspection_id String,
   hydrant_id String,
   inspection_date Date,
@@ -102,7 +102,7 @@ ORDER BY (hydrant_id, inspection_date)
 
 // Valves
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.valves (
+CREATE TABLE IF NOT EXISTS hawkeye.valves (
   valve_id String,
   location_address String,
   cross_street String,
@@ -127,7 +127,7 @@ ORDER BY valve_id
 
 // Valve Exercises
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.valve_exercises (
+CREATE TABLE IF NOT EXISTS hawkeye.valve_exercises (
   exercise_id String,
   valve_id String,
   exercise_date Date,
@@ -150,7 +150,7 @@ ORDER BY (valve_id, exercise_date)
 
 // Water Mains
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.mains (
+CREATE TABLE IF NOT EXISTS hawkeye.mains (
   main_id String,
   start_location String,
   end_location String,
@@ -175,7 +175,7 @@ ORDER BY main_id
 
 // Main Breaks
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.main_breaks (
+CREATE TABLE IF NOT EXISTS hawkeye.main_breaks (
   break_id String,
   main_id String,
   break_date DateTime,
@@ -206,7 +206,7 @@ ORDER BY (main_id, break_date)
 
 // Work Orders
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.work_orders (
+CREATE TABLE IF NOT EXISTS hawkeye.work_orders (
   work_order_id String,
   asset_type Enum8('hydrant' = 1, 'valve' = 2, 'main' = 3, 'service' = 4, 'meter' = 5, 'other' = 6),
   asset_id String,
@@ -235,7 +235,7 @@ ORDER BY (work_order_id, requested_date)
 
 // Documents / Attachments
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.documents (
+CREATE TABLE IF NOT EXISTS hawkeye.documents (
   document_id String,
   document_type Enum8('as_built' = 1, 'inspection_report' = 2, 'photo' = 3, 'video' = 4, 'permit' = 5, 'contract' = 6, 'drawing' = 7, 'scan' = 8, 'other' = 9),
   title String,
@@ -258,7 +258,7 @@ ORDER BY (document_id, upload_date)
 
 // Claims
 seedStatements.push(`
-CREATE TABLE IF NOT EXISTS eastbay_water.claims (
+CREATE TABLE IF NOT EXISTS hawkeye.claims (
   claim_id String,
   main_break_id String,
   claimant_name String,
@@ -286,7 +286,7 @@ ORDER BY (claim_id, claim_date)
 
 // Pressure Zones
 seedStatements.push(`
-INSERT INTO eastbay_water.pressure_zones (zone_id, zone_name, min_pressure, max_pressure, elevation_range, service_area, population_served) VALUES
+INSERT INTO hawkeye.pressure_zones (zone_id, zone_name, min_pressure, max_pressure, elevation_range, service_area, population_served) VALUES
 ('PZ-001', 'Oakland Hills High', 45, 80, '800-1200 ft', 'Oakland Hills, Montclair', 25000),
 ('PZ-002', 'Oakland Hills Mid', 50, 85, '400-800 ft', 'Upper Rockridge, Piedmont Ave', 45000),
 ('PZ-003', 'Oakland Flatlands', 55, 90, '0-400 ft', 'Downtown Oakland, Lake Merritt', 120000),
@@ -301,7 +301,7 @@ INSERT INTO eastbay_water.pressure_zones (zone_id, zone_name, min_pressure, max_
 
 // Critical Users
 seedStatements.push(`
-INSERT INTO eastbay_water.critical_users (facility_id, facility_name, facility_type, address, city, pressure_zone, contact_name, contact_phone, contact_email, priority_level, notes) VALUES
+INSERT INTO hawkeye.critical_users (facility_id, facility_name, facility_type, address, city, pressure_zone, contact_name, contact_phone, contact_email, priority_level, notes) VALUES
 ('CU-001', 'Highland Hospital', 'hospital', '1411 E 31st St', 'Oakland', 'PZ-005', 'James Chen', '510-437-4800', 'jchen@alamedahealthsystem.org', 'critical', 'Level 1 Trauma Center - requires 24/7 water supply'),
 ('CU-002', 'Kaiser Permanente Oakland', 'hospital', '3600 Broadway', 'Oakland', 'PZ-003', 'Maria Santos', '510-752-1000', 'maria.santos@kp.org', 'critical', 'Major medical center with dialysis unit'),
 ('CU-003', 'UCSF Benioff Children\\'s Hospital', 'hospital', '747 52nd St', 'Oakland', 'PZ-004', 'Robert Kim', '510-428-3000', 'rkim@ucsf.edu', 'critical', 'Pediatric trauma center'),
@@ -369,7 +369,7 @@ for (let i = 1; i <= 5000; i++) {
 for (let i = 0; i < hydrantInserts.length; i += 100) {
   const chunk = hydrantInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.hydrants (hydrant_id, location_address, cross_street, city, latitude, longitude, pressure_zone, installation_date, manufacturer, model, hydrant_type, barrel_size, main_size, status, last_inspection_date, last_flow_test_date, static_pressure, residual_pressure, flow_rate) VALUES
+INSERT INTO hawkeye.hydrants (hydrant_id, location_address, cross_street, city, latitude, longitude, pressure_zone, installation_date, manufacturer, model, hydrant_type, barrel_size, main_size, status, last_inspection_date, last_flow_test_date, static_pressure, residual_pressure, flow_rate) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -407,7 +407,7 @@ for (let i = 1; i <= 50000; i++) {
 for (let i = 0; i < inspectionInserts.length; i += 100) {
   const chunk = inspectionInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.hydrant_inspections (inspection_id, hydrant_id, inspection_date, inspection_type, inspector_name, inspector_id, result, static_pressure, residual_pressure, flow_rate, condition_rating, caps_condition, nozzles_condition, paint_condition, operating_nut_condition, drain_condition, notes, follow_up_required, work_order_created) VALUES
+INSERT INTO hawkeye.hydrant_inspections (inspection_id, hydrant_id, inspection_date, inspection_type, inspector_name, inspector_id, result, static_pressure, residual_pressure, flow_rate, condition_rating, caps_condition, nozzles_condition, paint_condition, operating_nut_condition, drain_condition, notes, follow_up_required, work_order_created) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -445,7 +445,7 @@ for (let i = 1; i <= 8000; i++) {
 for (let i = 0; i < valveInserts.length; i += 100) {
   const chunk = valveInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.valves (valve_id, location_address, cross_street, city, latitude, longitude, pressure_zone, installation_date, manufacturer, valve_type, valve_size, main_id, turns_to_close, normal_position, status, criticality, last_exercise_date) VALUES
+INSERT INTO hawkeye.valves (valve_id, location_address, cross_street, city, latitude, longitude, pressure_zone, installation_date, manufacturer, valve_type, valve_size, main_id, turns_to_close, normal_position, status, criticality, last_exercise_date) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -480,7 +480,7 @@ for (let i = 1; i <= 80000; i++) {
 for (let i = 0; i < exerciseInserts.length; i += 100) {
   const chunk = exerciseInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.valve_exercises (exercise_id, valve_id, exercise_date, crew_id, crew_members, turns_achieved, turns_expected, result, condition_rating, torque_required, box_condition, stem_condition, notes, follow_up_required, work_order_created) VALUES
+INSERT INTO hawkeye.valve_exercises (exercise_id, valve_id, exercise_date, crew_id, crew_members, turns_achieved, turns_expected, result, condition_rating, torque_required, box_condition, stem_condition, notes, follow_up_required, work_order_created) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -520,7 +520,7 @@ for (let i = 1; i <= 3000; i++) {
 for (let i = 0; i < mainInserts.length; i += 100) {
   const chunk = mainInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.mains (main_id, start_location, end_location, street_name, city, pressure_zone, installation_date, material, diameter, length_ft, depth_ft, lining_type, status, break_history_count, last_break_date, condition_score, replacement_priority) VALUES
+INSERT INTO hawkeye.mains (main_id, start_location, end_location, street_name, city, pressure_zone, installation_date, material, diameter, length_ft, depth_ft, lining_type, status, break_history_count, last_break_date, condition_score, replacement_priority) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -564,7 +564,7 @@ for (let i = 1; i <= 2000; i++) {
 for (let i = 0; i < breakInserts.length; i += 50) {
   const chunk = breakInserts.slice(i, i + 50);
   seedStatements.push(`
-INSERT INTO eastbay_water.main_breaks (break_id, main_id, break_date, reported_by, report_method, location_address, city, latitude, longitude, break_type, cause, estimated_gallons_lost, customers_affected, repair_start, repair_end, repair_crew_id, repair_method, repair_materials, road_damage, property_damage, claim_filed, total_repair_cost, notes) VALUES
+INSERT INTO hawkeye.main_breaks (break_id, main_id, break_date, reported_by, report_method, location_address, city, latitude, longitude, break_type, cause, estimated_gallons_lost, customers_affected, repair_start, repair_end, repair_crew_id, repair_method, repair_materials, road_damage, property_damage, claim_filed, total_repair_cost, notes) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -622,7 +622,7 @@ for (let i = 1; i <= 25000; i++) {
 for (let i = 0; i < workOrderInserts.length; i += 100) {
   const chunk = workOrderInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.work_orders (work_order_id, asset_type, asset_id, work_type, priority, status, description, location_address, city, requested_by, requested_date, assigned_crew, assigned_date, scheduled_date, started_date, completed_date, labor_hours, material_cost, equipment_cost, total_cost, completion_notes) VALUES
+INSERT INTO hawkeye.work_orders (work_order_id, asset_type, asset_id, work_type, priority, status, description, location_address, city, requested_by, requested_date, assigned_crew, assigned_date, scheduled_date, started_date, completed_date, labor_hours, material_cost, equipment_cost, total_cost, completion_notes) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -685,7 +685,7 @@ for (let i = 1; i <= 20000; i++) {
 for (let i = 0; i < documentInserts.length; i += 100) {
   const chunk = documentInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO eastbay_water.documents (document_id, document_type, title, description, file_name, file_path, file_size_bytes, mime_type, asset_type, asset_id, work_order_id, main_break_id, source_system, uploaded_by, upload_date) VALUES
+INSERT INTO hawkeye.documents (document_id, document_type, title, description, file_name, file_path, file_size_bytes, mime_type, asset_type, asset_id, work_order_id, main_break_id, source_system, uploaded_by, upload_date) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -731,7 +731,7 @@ for (let i = 1; i <= 500; i++) {
 }
 
 seedStatements.push(`
-INSERT INTO eastbay_water.claims (claim_id, main_break_id, claimant_name, claimant_address, claimant_phone, claimant_email, claim_date, incident_date, claim_type, damage_description, claimed_amount, approved_amount, status, adjuster_name, adjuster_notes, resolution_date) VALUES
+INSERT INTO hawkeye.claims (claim_id, main_break_id, claimant_name, claimant_address, claimant_phone, claimant_email, claim_date, incident_date, claim_type, damage_description, claimed_amount, approved_amount, status, adjuster_name, adjuster_notes, resolution_date) VALUES
 ${claimInserts.join(',\n')}
 `);
 

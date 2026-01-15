@@ -39,7 +39,7 @@ jobs:
           CLICKHOUSE_HOST=http://clickhouse:8123
           CLICKHOUSE_USER=default
           CLICKHOUSE_PASSWORD=clickhouse
-          CLICKHOUSE_DATABASE=eastbay_water
+          CLICKHOUSE_DATABASE=hawkeye
           EOF
 
           # Remove leading whitespace from each line
@@ -50,7 +50,7 @@ jobs:
 
       - name: Deploy with SSL
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.VM_USER }}@${{ env.VM_HOST }} << 'SSHEOF'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.VM_USER }}@${{ env.VM_HOST }} 'bash -s' << 'SSHEOF'
             set -e
             cd /opt/hawkeyes
 
@@ -64,14 +64,17 @@ jobs:
             chmod +x scripts/init-ssl.sh || true
 
             # Check if SSL certificates exist
-            CERT_EXISTS=$(sudo docker volume ls | grep -q certbot_conf && \
-              sudo docker run --rm -v hawkeyes_certbot_conf:/etc/letsencrypt alpine \
-              test -f /etc/letsencrypt/live/hawkeye.sutroconsultants.com/fullchain.pem && echo "yes" || echo "no")
+            CERT_EXISTS="no"
+            if sudo docker volume ls | grep -q hawkeyes_certbot_conf; then
+              if sudo docker run --rm -v hawkeyes_certbot_conf:/etc/letsencrypt alpine test -f /etc/letsencrypt/live/hawkeye.sutroconsultants.com/fullchain.pem 2>/dev/null; then
+                CERT_EXISTS="yes"
+              fi
+            fi
 
             if [ "$CERT_EXISTS" = "yes" ]; then
               echo "SSL certificates exist, using production config..."
-              # Use the full SSL config
-              cp nginx/nginx.conf nginx/nginx.conf.bak 2>/dev/null || true
+              # Use the full SSL config file
+              cp nginx/nginx-ssl.conf nginx/nginx.conf
 
               # Restart with production compose (preserves cert volumes)
               sudo docker-compose -f docker-compose.prod.yml down || true
@@ -98,54 +101,8 @@ jobs:
                 --no-eff-email \
                 -d hawkeye.sutroconsultants.com || echo "Certbot failed - may need manual setup"
 
-              # Switch to full SSL config
-              cat > nginx/nginx.conf << 'NGINXEOF'
-upstream web {
-    server web:7900;
-}
-
-server {
-    listen 80;
-    server_name hawkeye.sutroconsultants.com;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name hawkeye.sutroconsultants.com;
-
-    ssl_certificate /etc/letsencrypt/live/hawkeye.sutroconsultants.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/hawkeye.sutroconsultants.com/privkey.pem;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    location / {
-        proxy_pass http://web;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 86400;
-    }
-}
-NGINXEOF
+              # Switch to full SSL config (using the committed file)
+              cp nginx/nginx-ssl.conf nginx/nginx.conf
 
               # Reload nginx with SSL config
               sudo docker-compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || \

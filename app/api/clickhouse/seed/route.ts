@@ -51,7 +51,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const client = getClickHouseClient();
 
-    // Drop all tables in eastbay_water database
+    // Drop all tables in hawkeye database
     const tables = [
       "claims",
       "documents",
@@ -69,7 +69,7 @@ export async function DELETE(request: NextRequest) {
     for (const table of tables) {
       try {
         await client.command({
-          query: `DROP TABLE IF EXISTS eastbay_water.${table}`,
+          query: `DROP TABLE IF EXISTS hawkeye.${table}`,
         });
       } catch (error) {
         console.error(`Failed to drop ${table}:`, error);
@@ -78,11 +78,11 @@ export async function DELETE(request: NextRequest) {
 
     // Drop the database
     await client.command({
-      query: "DROP DATABASE IF EXISTS eastbay_water",
+      query: "DROP DATABASE IF EXISTS hawkeye",
     });
 
     return NextResponse.json({
-      message: "Database reset complete - all East Bay Water tables dropped",
+      message: "Database reset complete - all HawkEye tables dropped",
     });
   } catch (error) {
     console.error("Reset failed:", error);

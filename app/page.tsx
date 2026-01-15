@@ -14,8 +14,8 @@ import {
 const demoProjects = [
   // SF Bay Area (8 agencies)
   {
-    id: "eastbay-water",
-    name: "East Bay Water Authority",
+    id: "oakland-water",
+    name: "Oakland Municipal Water",
     description: "Oakland, Berkeley, Emeryville - Water distribution system",
     region: "SF Bay Area",
   },
