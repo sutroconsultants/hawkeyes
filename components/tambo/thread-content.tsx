@@ -17,21 +17,29 @@ import * as React from "react";
 
 function extractQueryFromToolResult(
   content: TamboThreadMessage["content"],
-): string | null {
+): { query: string; description?: string } | null {
   if (!content) return null;
 
-  const parseQueryObject = (value: unknown): string | null => {
+  const parseQueryObject = (value: unknown): { query: string; description?: string } | null => {
     if (!value || typeof value !== "object") return null;
     const record = value as Record<string, unknown>;
-    if (typeof record.executedQuery === "string") return record.executedQuery;
-    if (typeof record.query === "string") return record.query;
-    if (typeof record.sql === "string") return record.sql;
+    // Check for suggested query first (from suggest_clickhouse_query tool)
+    if (typeof record.suggestedQuery === "string") {
+      return {
+        query: record.suggestedQuery,
+        description: typeof record.description === "string" ? record.description : undefined
+      };
+    }
+    if (typeof record.executedQuery === "string") return { query: record.executedQuery };
+    if (typeof record.query === "string") return { query: record.query };
+    if (typeof record.sql === "string") return { query: record.sql };
     return null;
   };
 
-  const parseQueryText = (text: string): string | null => {
+  const parseQueryText = (text: string): { query: string; description?: string } | null => {
     try {
-      return parseQueryObject(JSON.parse(text));
+      const parsed = JSON.parse(text);
+      return parseQueryObject(parsed);
     } catch {
       return null;
     }
@@ -44,17 +52,17 @@ function extractQueryFromToolResult(
 
       if (part.type === "tool_result" && part.content) {
         if (typeof part.content === "string") {
-          const query = parseQueryText(part.content);
-          if (query) return query;
+          const result = parseQueryText(part.content);
+          if (result) return result;
         } else {
-          const query = parseQueryObject(part.content);
-          if (query) return query;
+          const result = parseQueryObject(part.content);
+          if (result) return result;
         }
       }
 
       if (part.type === "text" && typeof part.text === "string") {
-        const query = parseQueryText(part.text);
-        if (query) return query;
+        const result = parseQueryText(part.text);
+        if (result) return result;
       }
     }
   }
@@ -188,28 +196,28 @@ const ThreadContentMessages = React.forwardRef<
   );
 
   const fallbackQueryByMessageId = React.useMemo(() => {
-    const map = new Map<string, string>();
-    let pendingQuery: string | null = null;
+    const map = new Map<string, { query: string; description?: string }>();
+    let pendingQueryInfo: { query: string; description?: string } | null = null;
 
     for (let i = 0; i < threadMessages.length; i += 1) {
       const msg = threadMessages[i];
       if (msg.role === "tool") {
-        const query = extractQueryFromToolResult(msg.content);
-        if (query) {
-          pendingQuery = query;
+        const queryInfo = extractQueryFromToolResult(msg.content);
+        if (queryInfo) {
+          pendingQueryInfo = queryInfo;
           continue;
         }
       }
 
-      if (msg.role === "assistant" && pendingQuery) {
+      if (msg.role === "assistant" && pendingQueryInfo) {
         const key = getMessageKey(msg);
-        map.set(key, pendingQuery);
-        pendingQuery = null;
+        map.set(key, pendingQueryInfo);
+        pendingQueryInfo = null;
         continue;
       }
 
       if (msg.role === "user") {
-        pendingQuery = null;
+        pendingQueryInfo = null;
       }
     }
 
@@ -260,14 +268,15 @@ const ThreadContentMessages = React.forwardRef<
                 {message.role === "assistant" &&
                   !message.renderedComponent &&
                   (() => {
-                    const fallbackQuery = fallbackQueryByMessageId.get(
+                    const fallbackQueryInfo = fallbackQueryByMessageId.get(
                       messageKey,
                     );
-                    return fallbackQuery ? (
+                    return fallbackQueryInfo ? (
                       <div className="w-full pt-2 px-2">
                         <QuerySuggestionView
-                          query={fallbackQuery}
-                          title="View Results"
+                          query={fallbackQueryInfo.query}
+                          title="Suggested Query"
+                          description={fallbackQueryInfo.description}
                         />
                       </div>
                     ) : null;

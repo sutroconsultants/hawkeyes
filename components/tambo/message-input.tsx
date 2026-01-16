@@ -393,7 +393,9 @@ const MessageInputInternal = React.forwardRef<
   const handleSubmit = React.useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if ((!value.trim() && images.length === 0) || isSubmitting) return;
+      if ((!value.trim() && images.length === 0) || isSubmitting) {
+        return;
+      }
 
       setSubmitError(null);
       setDisplayValue("");
@@ -425,7 +427,7 @@ const MessageInputInternal = React.forwardRef<
           editorRef.current?.focus();
         }, 0);
       } catch (error) {
-        console.error("Failed to submit message:", error);
+        console.error("[MessageInput] Failed to submit message:", error);
         setDisplayValue(value);
         setSubmitError(
           error instanceof Error
