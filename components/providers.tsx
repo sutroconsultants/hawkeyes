@@ -5,41 +5,74 @@ import { TamboProvider } from "@tambo-ai/react";
 import { clickhouseTools } from "@/lib/tambo-tools";
 import { QuerySuggestion } from "@/components/tambo";
 
-const systemInstructions = `You are HawkEye, a helpful AI assistant for water utility operations. You help users explore and analyze water utility data stored in ClickHouse.
-
-Available tables in the hawkeye database:
-- work_orders: work_order_id, priority (enum: 'emergency','urgent','high','medium','low'), status, description, location_address, city, requested_by, created_at
-- hydrants: hydrant_id, location, latitude, longitude, status, last_inspection_date, flow_rate_gpm
-- hydrant_inspections: inspection_id, hydrant_id, inspection_date, result, inspector, notes
-- valves: valve_id, valve_type, location, latitude, longitude, status, last_exercise_date
-- valve_exercises: exercise_id, valve_id, exercise_date, result, turns_to_close, notes
-- mains: main_id, diameter_inches, material, install_date, street_name, length_feet, start_lat, start_lng, end_lat, end_lng
-- main_breaks: break_id, main_id, break_date, cause, repair_status, estimated_gallons_lost, latitude, longitude
-- pressure_zones: zone_id, zone_name, target_psi, population_served
-- critical_users: user_id, facility_name, facility_type (hospital, school, etc.), address, priority_level
-- claims: claim_id, claimant_name, incident_date, claim_type, amount, status
-- documents: document_id, title, document_type, related_asset_id, upload_date
+const BASE_INSTRUCTIONS = `You are HawkEye, a helpful AI assistant for water utility operations. You help users explore and analyze water utility data stored in ClickHouse.
 
 WORKFLOW:
-1. When user asks about data, first explain what you'll look for
-2. Use suggest_query to show the SQL query
+1. When user asks about data, briefly explain what you'll look for
+2. Use suggest_query tool to show the SQL query - this displays an interactive card with Run Query button
 3. The user will click "Run Query" to execute it
 
 RESPONSE STYLE:
-- Be conversational
-- Explain what the query will return
-
-Example:
-User: "Any emergency work orders?"
-You: "I'll look for emergency priority work orders. Here's a query to find them:"
-[Call suggest_query with the SQL]
+- Be brief and conversational
+- Don't repeat yourself
 
 QUERY RULES:
 - Always use LIMIT (default 100)
 - For Enum columns use string values: WHERE priority = 'emergency'
-- Use hawkeye database: SELECT * FROM hawkeye.table_name`;
+- Use hawkeye database: SELECT * FROM hawkeye.table_name
+- Use the exact column names from the schema below`;
 
-const systemInstructionsHelper = () => systemInstructions;
+interface TableSchema {
+  name: string;
+  database: string;
+  columns: Array<{ name: string; type: string }>;
+}
+
+async function fetchAllSchemas(): Promise<string> {
+  try {
+    // First get all tables
+    const tablesRes = await fetch("/api/clickhouse/tables");
+    if (!tablesRes.ok) return "";
+
+    const tablesData = await tablesRes.json();
+    const tables = tablesData.tables as Array<{ name: string; database: string }>;
+
+    // Fetch schema for each table in parallel
+    const schemaPromises = tables.map(async (table): Promise<TableSchema | null> => {
+      try {
+        const res = await fetch(
+          `/api/clickhouse/columns?database=${table.database}&table=${table.name}`
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        return {
+          name: table.name,
+          database: table.database,
+          columns: data.columns,
+        };
+      } catch {
+        return null;
+      }
+    });
+
+    const schemas = (await Promise.all(schemaPromises)).filter(Boolean) as TableSchema[];
+
+    // Format schemas as readable text
+    const schemaText = schemas
+      .map((schema) => {
+        const cols = schema.columns
+          .map((c) => `  ${c.name}: ${c.type}`)
+          .join("\n");
+        return `${schema.database}.${schema.name}:\n${cols}`;
+      })
+      .join("\n\n");
+
+    return schemaText;
+  } catch (error) {
+    console.error("Failed to fetch schemas:", error);
+    return "";
+  }
+}
 
 interface TamboProviderWrapperProps {
   children: React.ReactNode;
@@ -56,10 +89,25 @@ export function useTamboConfig() {
 
 export function TamboProviderWrapper({ children }: TamboProviderWrapperProps) {
   const apiKey = process.env.NEXT_PUBLIC_TAMBO_API_KEY;
-  const tamboComponents = React.useMemo(
-    () => [QuerySuggestion],  // Removed associatedTools to test
-    []
-  );
+  const [schemaText, setSchemaText] = React.useState<string>("");
+  const tamboComponents = React.useMemo(() => [QuerySuggestion], []);
+
+  // Fetch schemas on mount
+  React.useEffect(() => {
+    fetchAllSchemas().then(setSchemaText);
+  }, []);
+
+  // Create the system instructions helper that includes dynamic schema
+  const systemInstructionsHelper = React.useCallback(() => {
+    if (!schemaText) {
+      return BASE_INSTRUCTIONS + "\n\n(Schema loading...)";
+    }
+    return `${BASE_INSTRUCTIONS}
+
+Available tables and their schemas:
+
+${schemaText}`;
+  }, [schemaText]);
 
   if (!apiKey) {
     console.warn(

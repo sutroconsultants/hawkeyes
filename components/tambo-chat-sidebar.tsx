@@ -26,6 +26,7 @@ import {
 } from "@/components/tambo/thread-content";
 import type { TamboEditor } from "@/components/tambo/text-editor";
 import { useTambo } from "@tambo-ai/react";
+import { FIX_QUERY_EVENT, type FixQueryEventDetail } from "@/lib/tambo-events";
 
 // Demo prompts for water utility data exploration
 const DEMO_PROMPTS = [
@@ -36,9 +37,31 @@ const DEMO_PROMPTS = [
   "List critical users like hospitals in Oakland",
 ];
 
+// Fetch table schema for a fully qualified table name (e.g., "hawkeye.hydrants")
+async function fetchTableSchema(tableName: string): Promise<string> {
+  const parts = tableName.split(".");
+  const database = parts.length > 1 ? parts[0] : "hawkeye";
+  const table = parts.length > 1 ? parts[1] : parts[0];
+
+  try {
+    const response = await fetch(
+      `/api/clickhouse/columns?database=${encodeURIComponent(database)}&table=${encodeURIComponent(table)}`
+    );
+    if (!response.ok) return `-- Could not fetch schema for ${tableName}`;
+
+    const data = await response.json();
+    const columns = data.columns as Array<{ name: string; type: string }>;
+    const columnDefs = columns.map((c) => `  ${c.name} ${c.type}`).join(",\n");
+    return `-- ${tableName}\nCREATE TABLE ${tableName} (\n${columnDefs}\n)`;
+  } catch {
+    return `-- Could not fetch schema for ${tableName}`;
+  }
+}
+
 export function TamboChatSidebar({ className }: { className?: string }) {
   const { startNewThread, thread } = useTambo();
   const editorRef = React.useRef<TamboEditor>(null!);
+  const submitButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const hasMessages = thread?.messages && thread.messages.length > 0;
 
@@ -55,6 +78,46 @@ export function TamboChatSidebar({ className }: { className?: string }) {
     }
     startNewThread();
   };
+
+  // Listen for fix query events from SQL editor
+  React.useEffect(() => {
+    const handleFixQuery = async (event: Event) => {
+      const { query, error, tables } = (event as CustomEvent<FixQueryEventDetail>).detail;
+
+      // Fetch schemas for all referenced tables
+      const schemaPromises = tables.map(fetchTableSchema);
+      const schemas = await Promise.all(schemaPromises);
+
+      // Compose the message to send to the AI
+      const message = `Fix this SQL query that has an error.
+
+Error:
+${error}
+
+Failed Query:
+\`\`\`sql
+${query}
+\`\`\`
+
+Table Schemas:
+${schemas.join("\n\n")}
+
+Please analyze the error and provide the corrected SQL query. Start with a brief explanation of what was wrong, then use the suggest_query tool to show the corrected query so I can run it.`;
+
+      // Set the message in the editor and auto-submit
+      if (editorRef.current) {
+        editorRef.current.setContent(message);
+        editorRef.current.focus("end");
+        // Auto-submit after a brief delay to ensure content is set
+        setTimeout(() => {
+          submitButtonRef.current?.click();
+        }, 100);
+      }
+    };
+
+    window.addEventListener(FIX_QUERY_EVENT, handleFixQuery);
+    return () => window.removeEventListener(FIX_QUERY_EVENT, handleFixQuery);
+  }, []);
 
   return (
     <div className={cn("flex h-full flex-col overflow-hidden", className)}>
@@ -119,7 +182,7 @@ export function TamboChatSidebar({ className }: { className?: string }) {
         <MessageInput inputRef={editorRef}>
           <MessageInputTextarea placeholder="Ask about your data..." />
           <MessageInputToolbar>
-            <MessageInputSubmitButton />
+            <MessageInputSubmitButton ref={submitButtonRef} />
           </MessageInputToolbar>
           <MessageInputError />
         </MessageInput>

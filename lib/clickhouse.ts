@@ -8,7 +8,8 @@ export function getClickHouseClient(): ClickHouseClient {
       url: process.env.CLICKHOUSE_HOST || "http://localhost:8123",
       username: process.env.CLICKHOUSE_USER || "default",
       password: process.env.CLICKHOUSE_PASSWORD || "clickhouse",
-      database: process.env.CLICKHOUSE_DATABASE || "hawkeyes",
+      // Don't specify a database - queries use fully qualified names (e.g., hawkeye.work_orders)
+      // This allows seed to run even when database doesn't exist yet
     });
   }
   return client;

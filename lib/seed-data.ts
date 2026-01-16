@@ -9,6 +9,10 @@ export const seedStatements: string[] = [];
 // ============================================================================
 
 seedStatements.push(`
+SET allow_experimental_geo_types = 1
+`);
+
+seedStatements.push(`
 CREATE DATABASE IF NOT EXISTS hawkeye
 `);
 
@@ -55,6 +59,7 @@ CREATE TABLE IF NOT EXISTS hawkeye.hydrants (
   city String,
   latitude Float64,
   longitude Float64,
+  location Point,
   pressure_zone String,
   installation_date Date,
   manufacturer String,
@@ -109,6 +114,7 @@ CREATE TABLE IF NOT EXISTS hawkeye.valves (
   city String,
   latitude Float64,
   longitude Float64,
+  location Point,
   pressure_zone String,
   installation_date Date,
   manufacturer String,
@@ -154,6 +160,12 @@ CREATE TABLE IF NOT EXISTS hawkeye.mains (
   main_id String,
   start_location String,
   end_location String,
+  start_lat Float64,
+  start_lng Float64,
+  end_lat Float64,
+  end_lng Float64,
+  start_point Point,
+  end_point Point,
   street_name String,
   city String,
   pressure_zone String,
@@ -185,6 +197,7 @@ CREATE TABLE IF NOT EXISTS hawkeye.main_breaks (
   city String,
   latitude Float64,
   longitude Float64,
+  location Point,
   break_type Enum8('circumferential' = 1, 'longitudinal' = 2, 'joint_failure' = 3, 'corrosion_hole' = 4, 'service_connection' = 5, 'fitting_failure' = 6),
   cause Enum8('corrosion' = 1, 'age' = 2, 'ground_movement' = 3, 'third_party_damage' = 4, 'pressure_surge' = 5, 'temperature' = 6, 'unknown' = 7),
   estimated_gallons_lost UInt32,
@@ -362,14 +375,15 @@ for (let i = 1; i <= 5000; i++) {
   const residualPressure = 30 + Math.floor(Math.random() * 30);
   const flowRate = 800 + Math.floor(Math.random() * 1200);
 
-  hydrantInserts.push(`('${id}', '${streetNum} ${street}', '${crossStreet}', '${city}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, '${zone}', '${installYear}-${String(installMonth).padStart(2, '0')}-${String(installDay).padStart(2, '0')}', '${mfg}', '${model}', ${hType}, '${barrelSize}', '${mainSize}', ${status}, '${lastInspYear}-${String(lastInspMonth).padStart(2, '0')}-${String(lastInspDay).padStart(2, '0')}', '${lastInspYear}-${String(lastInspMonth).padStart(2, '0')}-${String(lastInspDay).padStart(2, '0')}', ${staticPressure}, ${residualPressure}, ${flowRate})`);
+  // Point is (longitude, latitude) in ClickHouse
+  hydrantInserts.push(`('${id}', '${streetNum} ${street}', '${crossStreet}', '${city}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, (${lng.toFixed(6)}, ${lat.toFixed(6)}), '${zone}', '${installYear}-${String(installMonth).padStart(2, '0')}-${String(installDay).padStart(2, '0')}', '${mfg}', '${model}', ${hType}, '${barrelSize}', '${mainSize}', ${status}, '${lastInspYear}-${String(lastInspMonth).padStart(2, '0')}-${String(lastInspDay).padStart(2, '0')}', '${lastInspYear}-${String(lastInspMonth).padStart(2, '0')}-${String(lastInspDay).padStart(2, '0')}', ${staticPressure}, ${residualPressure}, ${flowRate})`);
 }
 
 // Split hydrant inserts into chunks
 for (let i = 0; i < hydrantInserts.length; i += 100) {
   const chunk = hydrantInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO hawkeye.hydrants (hydrant_id, location_address, cross_street, city, latitude, longitude, pressure_zone, installation_date, manufacturer, model, hydrant_type, barrel_size, main_size, status, last_inspection_date, last_flow_test_date, static_pressure, residual_pressure, flow_rate) VALUES
+INSERT INTO hawkeye.hydrants (hydrant_id, location_address, cross_street, city, latitude, longitude, location, pressure_zone, installation_date, manufacturer, model, hydrant_type, barrel_size, main_size, status, last_inspection_date, last_flow_test_date, static_pressure, residual_pressure, flow_rate) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -439,13 +453,14 @@ for (let i = 1; i <= 8000; i++) {
   const lastExerciseMonth = Math.floor(Math.random() * 12) + 1;
   const lastExerciseDay = Math.floor(Math.random() * 28) + 1;
 
-  valveInserts.push(`('${id}', '${streetNum} ${street}', '${crossStreet}', '${city}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, '${zone}', '${installYear}-${String(installMonth).padStart(2, '0')}-${String(installDay).padStart(2, '0')}', '${mfg}', ${vType}, '${vSize}', '${mainId}', ${turnsToClose}, ${normalPosition}, ${status}, ${criticality}, '${lastExerciseYear}-${String(lastExerciseMonth).padStart(2, '0')}-${String(lastExerciseDay).padStart(2, '0')}')`);
+  // Point is (longitude, latitude) in ClickHouse
+  valveInserts.push(`('${id}', '${streetNum} ${street}', '${crossStreet}', '${city}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, (${lng.toFixed(6)}, ${lat.toFixed(6)}), '${zone}', '${installYear}-${String(installMonth).padStart(2, '0')}-${String(installDay).padStart(2, '0')}', '${mfg}', ${vType}, '${vSize}', '${mainId}', ${turnsToClose}, ${normalPosition}, ${status}, ${criticality}, '${lastExerciseYear}-${String(lastExerciseMonth).padStart(2, '0')}-${String(lastExerciseDay).padStart(2, '0')}')`);
 }
 
 for (let i = 0; i < valveInserts.length; i += 100) {
   const chunk = valveInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO hawkeye.valves (valve_id, location_address, cross_street, city, latitude, longitude, pressure_zone, installation_date, manufacturer, valve_type, valve_size, main_id, turns_to_close, normal_position, status, criticality, last_exercise_date) VALUES
+INSERT INTO hawkeye.valves (valve_id, location_address, cross_street, city, latitude, longitude, location, pressure_zone, installation_date, manufacturer, valve_type, valve_size, main_id, turns_to_close, normal_position, status, criticality, last_exercise_date) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -486,6 +501,7 @@ ${chunk.join(',\n')}
 }
 
 // Generate Water Mains (3000 mains)
+// Oakland/Bay Area bounding box: 37.78-37.88 lat, -122.35 to -122.18 lng
 let mainInserts: string[] = [];
 for (let i = 1; i <= 3000; i++) {
   const id = `MAIN-${String(i).padStart(4, '0')}`;
@@ -514,13 +530,27 @@ for (let i = 1; i <= 3000; i++) {
 
   const lastBreakDate = hasBreak ? `'${lastBreakYear}-${String(lastBreakMonth).padStart(2, '0')}-${String(lastBreakDay).padStart(2, '0')}'` : 'NULL';
 
-  mainInserts.push(`('${id}', '${startNum} ${street}', '${endNum} ${street}', '${street}', '${city}', '${zone}', '${installYear}-${String(installMonth).padStart(2, '0')}-${String(installDay).padStart(2, '0')}', ${material}, '${diameter}', ${length}, ${depth}, '${lining}', ${status}, ${breakCount}, ${lastBreakDate}, ${conditionScore}, ${priority})`);
+  // Generate realistic pipe segment coordinates
+  // Pipes run along streets, so we create line segments that follow a grid pattern
+  const baseLat = 37.78 + (Math.random() * 0.1);
+  const baseLng = -122.27 + (Math.random() * 0.1);
+  // Pipe length in degrees (roughly 200-2000 ft = 0.0006 - 0.006 degrees)
+  const lengthDegrees = length * 0.000003; // approx conversion
+  // Random direction (mostly N-S or E-W for street grid)
+  const isNorthSouth = Math.random() > 0.5;
+  const startLat = baseLat;
+  const startLng = baseLng;
+  const endLat = isNorthSouth ? baseLat + lengthDegrees : baseLat + (Math.random() * 0.0005 - 0.00025);
+  const endLng = isNorthSouth ? baseLng + (Math.random() * 0.0005 - 0.00025) : baseLng + lengthDegrees;
+
+  // Points are (longitude, latitude) in ClickHouse
+  mainInserts.push(`('${id}', '${startNum} ${street}', '${endNum} ${street}', ${startLat.toFixed(6)}, ${startLng.toFixed(6)}, ${endLat.toFixed(6)}, ${endLng.toFixed(6)}, (${startLng.toFixed(6)}, ${startLat.toFixed(6)}), (${endLng.toFixed(6)}, ${endLat.toFixed(6)}), '${street}', '${city}', '${zone}', '${installYear}-${String(installMonth).padStart(2, '0')}-${String(installDay).padStart(2, '0')}', ${material}, '${diameter}', ${length}, ${depth}, '${lining}', ${status}, ${breakCount}, ${lastBreakDate}, ${conditionScore}, ${priority})`);
 }
 
 for (let i = 0; i < mainInserts.length; i += 100) {
   const chunk = mainInserts.slice(i, i + 100);
   seedStatements.push(`
-INSERT INTO hawkeye.mains (main_id, start_location, end_location, street_name, city, pressure_zone, installation_date, material, diameter, length_ft, depth_ft, lining_type, status, break_history_count, last_break_date, condition_score, replacement_priority) VALUES
+INSERT INTO hawkeye.mains (main_id, start_location, end_location, start_lat, start_lng, end_lat, end_lng, start_point, end_point, street_name, city, pressure_zone, installation_date, material, diameter, length_ft, depth_ft, lining_type, status, break_history_count, last_break_date, condition_score, replacement_priority) VALUES
 ${chunk.join(',\n')}
 `);
 }
@@ -558,13 +588,13 @@ for (let i = 1; i <= 2000; i++) {
   const repairCost = 2000 + Math.floor(Math.random() * 50000);
   const notes = ['Emergency repair completed', 'Main isolated and repaired', 'Temporary repair - permanent scheduled', 'Full section replacement required', 'Customer notified'][Math.floor(Math.random() * 5)];
 
-  breakInserts.push(`('${id}', '${mainId}', '${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00', '${reportedBy}', ${reportMethod}, '${streetNum} ${street}', '${city}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, ${breakType}, ${cause}, ${gallonsLost}, ${customersAffected}, '${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(repairStartHour % 24).padStart(2, '0')}:00:00', '${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(repairEndHour % 24).padStart(2, '0')}:00:00', '${crew}', '${repairMethod}', '${repairMaterials}', ${roadDamage}, ${propertyDamage}, ${claimFiled}, ${repairCost}, '${notes}')`);
+  breakInserts.push(`('${id}', '${mainId}', '${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00', '${reportedBy}', ${reportMethod}, '${streetNum} ${street}', '${city}', ${lat.toFixed(6)}, ${lng.toFixed(6)}, (${lng.toFixed(6)}, ${lat.toFixed(6)}), ${breakType}, ${cause}, ${gallonsLost}, ${customersAffected}, '${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(repairStartHour % 24).padStart(2, '0')}:00:00', '${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(repairEndHour % 24).padStart(2, '0')}:00:00', '${crew}', '${repairMethod}', '${repairMaterials}', ${roadDamage}, ${propertyDamage}, ${claimFiled}, ${repairCost}, '${notes}')`);
 }
 
 for (let i = 0; i < breakInserts.length; i += 50) {
   const chunk = breakInserts.slice(i, i + 50);
   seedStatements.push(`
-INSERT INTO hawkeye.main_breaks (break_id, main_id, break_date, reported_by, report_method, location_address, city, latitude, longitude, break_type, cause, estimated_gallons_lost, customers_affected, repair_start, repair_end, repair_crew_id, repair_method, repair_materials, road_damage, property_damage, claim_filed, total_repair_cost, notes) VALUES
+INSERT INTO hawkeye.main_breaks (break_id, main_id, break_date, reported_by, report_method, location_address, city, latitude, longitude, location, break_type, cause, estimated_gallons_lost, customers_affected, repair_start, repair_end, repair_crew_id, repair_method, repair_materials, road_damage, property_damage, claim_filed, total_repair_cost, notes) VALUES
 ${chunk.join(',\n')}
 `);
 }

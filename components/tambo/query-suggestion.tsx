@@ -8,6 +8,7 @@ import type { TamboComponent } from "@tambo-ai/react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { QUERY_SUGGESTION_EVENT } from "@/lib/tambo-events";
+import { suggestQueryTool } from "@/lib/tambo-tools";
 
 export { QUERY_SUGGESTION_EVENT };
 
@@ -69,31 +70,41 @@ export function QuerySuggestionView({
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
-      {title && (
-        <h4 className="text-sm font-medium text-foreground">{title}</h4>
-      )}
+      <div className="flex items-center gap-2">
+        <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+        <h4 className="text-sm font-medium text-foreground">
+          {title || "Suggested Query"}
+        </h4>
+      </div>
       {finalDescription && (
-        <p className="text-sm text-muted-foreground">{finalDescription}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {finalDescription}
+        </p>
       )}
       <div className="bg-muted/50 rounded-md p-3 overflow-x-auto">
         <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all">
           {finalQuery}
         </pre>
       </div>
-      <ButtonGroup>
-        <Button size="sm" onClick={handleRunQuery}>
-          <Play className="h-3.5 w-3.5" />
-          Run Query
-        </Button>
-        <Button size="sm" variant="outline" onClick={handleCopyQuery}>
-          {copied ? (
-            <Check className="h-3.5 w-3.5" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </ButtonGroup>
+      <div className="flex items-center gap-2 pt-1">
+        <ButtonGroup>
+          <Button size="sm" onClick={handleRunQuery}>
+            <Play className="h-3.5 w-3.5" />
+            Run Query
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleCopyQuery}>
+            {copied ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </ButtonGroup>
+        <span className="text-xs text-muted-foreground">
+          Click to execute in SQL editor
+        </span>
+      </div>
     </div>
   );
 }
@@ -104,4 +115,5 @@ export const QuerySuggestion: TamboComponent = {
     "Shows a SQL query with Run/Copy actions so the user can execute it.",
   component: QuerySuggestionView,
   propsSchema: querySuggestionPropsSchema,
+  associatedTools: [suggestQueryTool],
 };

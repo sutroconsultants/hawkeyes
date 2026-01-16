@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Play, Loader2, Copy, Check, Download, X, ChevronDown } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Play, Loader2, Copy, Check, Download, X, ChevronDown, Sparkles } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql } from "@codemirror/lang-sql";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -25,7 +26,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { QUERY_SUGGESTION_EVENT } from "@/lib/tambo-events";
+import { QUERY_SUGGESTION_EVENT, FIX_QUERY_EVENT, type FixQueryEventDetail } from "@/lib/tambo-events";
+import { hasGeospatialData } from "@/components/map-results-view";
+
+// Dynamic import for MapResultsView to avoid WebGL SSR issues
+const MapResultsView = dynamic(
+  () => import("@/components/map-results-view").then((mod) => mod.MapResultsView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <p className="text-sm">Loading map...</p>
+      </div>
+    )
+  }
+);
+
+// Extract table names from a SQL query (e.g., "hawkeye.hydrants" -> ["hawkeye.hydrants"])
+function extractTableNames(query: string): string[] {
+  const tables: string[] = [];
+  // Match patterns like "FROM tablename" or "JOIN tablename"
+  const fromJoinPattern = /(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/gi;
+  let match;
+  while ((match = fromJoinPattern.exec(query)) !== null) {
+    const tableName = match[1];
+    if (!tables.includes(tableName)) {
+      tables.push(tableName);
+    }
+  }
+  return tables;
+}
 
 // Complex query examples for the dropdown
 const QUERY_EXAMPLES = [
@@ -443,12 +473,15 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to execute query");
+        // Include details from ClickHouse error if available
+        const errorMsg = data.error || "Failed to execute query";
+        throw new Error(errorMsg);
       }
 
       addOrUpdateTab(query, data, null);
     } catch (err) {
-      addOrUpdateTab(query, null, err instanceof Error ? err.message : "Unknown error");
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      addOrUpdateTab(query, null, errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -492,16 +525,15 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
         .then((response) => response.json().then((data) => ({ response, data })))
         .then(({ response, data }) => {
           if (!response.ok) {
-            throw new Error(data.error || "Failed to execute query");
+            // Include details from ClickHouse error if available
+            const errorMsg = data.error || "Failed to execute query";
+            throw new Error(errorMsg);
           }
           addOrUpdateTab(suggestedQuery, data, null);
         })
         .catch((err) => {
-          addOrUpdateTab(
-            suggestedQuery,
-            null,
-            err instanceof Error ? err.message : "Unknown error"
-          );
+          const errorMessage = err instanceof Error ? err.message : "Unknown error";
+          addOrUpdateTab(suggestedQuery, null, errorMessage);
         })
         .finally(() => {
           setIsLoading(false);
@@ -719,7 +751,36 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
             {/* Error Display */}
             {activeTab.error && (
               <div className="px-4 py-3 border-b bg-destructive/10">
-                <p className="text-sm text-destructive">{activeTab.error}</p>
+                <div className="flex items-start gap-2">
+                  <X className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-destructive">Query Error</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5 shrink-0"
+                        onClick={() => {
+                          const tables = extractTableNames(activeTab.query);
+                          const detail: FixQueryEventDetail = {
+                            query: activeTab.query,
+                            error: activeTab.error!,
+                            tables,
+                          };
+                          window.dispatchEvent(
+                            new CustomEvent(FIX_QUERY_EVENT, { detail })
+                          );
+                        }}
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Fix with AI
+                      </Button>
+                    </div>
+                    <p className="text-sm text-destructive/90 mt-1 font-mono whitespace-pre-wrap break-words">
+                      {activeTab.error}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -750,6 +811,9 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
                     <TabsList>
                       <TabsTrigger value="table">Table</TabsTrigger>
                       <TabsTrigger value="json">JSON</TabsTrigger>
+                      {hasGeospatialData(activeTab.result.data) && (
+                        <TabsTrigger value="map">Map</TabsTrigger>
+                      )}
                     </TabsList>
                   </div>
                   <TabsContent value="table" className="flex-1 m-0 min-h-0">
@@ -796,6 +860,11 @@ export function SqlEditor({ initialQuery = "", selectedTable }: SqlEditorProps) 
                       </pre>
                     </ScrollArea>
                   </TabsContent>
+                  {hasGeospatialData(activeTab.result.data) && (
+                    <TabsContent value="map" className="flex-1 m-0 min-h-0">
+                      <MapResultsView data={activeTab.result.data} />
+                    </TabsContent>
+                  )}
                 </Tabs>
               </>
             )}

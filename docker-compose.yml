@@ -30,7 +30,7 @@ services:
     working_dir: /app
     entrypoint: ["/bin/bash", "/app/scripts/docker-entrypoint.sh"]
     ports:
-      - "80:7900"
+      - "7900:7900"
     env_file:
       - .env.local
     environment:

@@ -31,8 +31,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to execute query:", error);
+
+    // Extract meaningful error message from ClickHouse error
+    let errorMessage = "Failed to execute query";
+    const errorString = String(error);
+
+    // ClickHouse errors often contain useful info after "Code:" or in the message
+    if (errorString.includes("Code:")) {
+      // Extract the ClickHouse error message
+      const match = errorString.match(/Code: \d+\.\s*([^(]+)/);
+      if (match) {
+        errorMessage = match[1].trim();
+      } else {
+        // Fallback: try to get the message part
+        const parts = errorString.split("Code:");
+        if (parts[1]) {
+          errorMessage = parts[1].trim();
+        }
+      }
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
     return NextResponse.json(
-      { error: "Failed to execute query", details: String(error) },
+      { error: errorMessage, details: errorString },
       { status: 500 }
     );
   }
